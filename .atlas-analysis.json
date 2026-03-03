@@ -1,0 +1,94 @@
+{
+  "projectType": "api-service",
+  "projectName": "Adoptme API",
+  "projectDescription": "A REST API service for managing pet adoptions with user authentication, pet catalog management, and adoption tracking.",
+  "theme": "palm",
+  "primaryColor": "#10b981",
+  "lightColor": "#34d399",
+  "darkColor": "#059669",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/architecture",
+              "concepts/data-models",
+              "concepts/authentication"
+            ]
+          },
+          {
+            "group": "Testing & Development",
+            "pages": [
+              "development/testing",
+              "development/mock-data",
+              "development/environment"
+            ]
+          },
+          {
+            "group": "Deployment",
+            "pages": [
+              "deployment/docker",
+              "deployment/railway",
+              "deployment/configuration"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Endpoints",
+            "pages": [
+              "api/overview",
+              "api/users",
+              "api/pets",
+              "api/adoptions",
+              "api/sessions",
+              "api/mocks"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "User management with authentication",
+    "Pet catalog and adoption tracking",
+    "JWT-based session management",
+    "Mock data generation for testing",
+    "Swagger/OpenAPI documentation",
+    "Docker containerization support",
+    "MongoDB data persistence"
+  ],
+  "publicApiSurface": [
+    "GET /api/users - List all users",
+    "GET /api/users/:uid - Get user by ID",
+    "PUT /api/users/:uid - Update user",
+    "DELETE /api/users/:uid - Delete user",
+    "GET /api/pets - List all pets",
+    "POST /api/pets - Create pet",
+    "POST /api/pets/withimage - Create pet with image",
+    "PUT /api/pets/:pid - Update pet",
+    "DELETE /api/pets/:pid - Delete pet",
+    "GET /api/adoptions - List all adoptions",
+    "GET /api/adoptions/:aid - Get adoption by ID",
+    "POST /api/adoptions/:uid/:pid - Create adoption",
+    "POST /api/sessions/register - Register new user",
+    "POST /api/sessions/login - User login",
+    "GET /api/sessions/current - Get current user",
+    "GET /api/mocks/mockingusers - Generate mock users",
+    "POST /api/mocks/generateData - Generate mock data"
+  ]
+}
