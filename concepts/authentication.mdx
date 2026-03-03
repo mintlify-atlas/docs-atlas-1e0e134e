@@ -22,7 +22,7 @@ The registration endpoint creates new user accounts with secure password storage
 
 ### Endpoint
 
-```
+```http
 POST /api/sessions/register
 ```
 
@@ -167,7 +167,7 @@ The login endpoint authenticates users and issues JWT tokens stored in cookies.
 
 ### Endpoint
 
-```
+```http
 POST /api/sessions/login
 ```
 
@@ -339,7 +339,7 @@ Verifies and returns the authenticated user's information from the JWT cookie.
 
 ### Endpoint
 
-```
+```http
 GET /api/sessions/current
 ```
 
@@ -432,7 +432,7 @@ This is a **security anti-pattern** and should not be used in production. It's i
 
 ### Endpoint
 
-```
+```http
 GET /api/sessions/unprotectedLogin
 ```
 
