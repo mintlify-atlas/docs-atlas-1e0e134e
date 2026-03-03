@@ -1,80 +1,138 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quickstart
+description: Get the Adoptme API running in under 5 minutes with a real API call
 ---
 
-## Get started in three steps
+# Quickstart guide
 
-Get your documentation site running locally and make your first customization.
+This guide will get you up and running with the Adoptme API in just a few minutes. You'll install the API, start the server, and make your first API call.
 
-### Step 1: Set up your local environment
+## Prerequisites
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
+Before you begin, ensure you have:
+
+- **Node.js v22 or higher** - [Download Node.js](https://nodejs.org/)
+- **MongoDB** - Running locally or a connection string to MongoDB Atlas
+- **Git** - For cloning the repository
+
+<Warning>
+  The Adoptme API requires Node.js v22+. Check your version with `node --version`
+</Warning>
+
+## Get started
+
+<Steps>
+  <Step title="Clone and install">
+    Clone the repository and install dependencies:
     
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
+    ```bash
+    git clone https://github.com/GitRepoFabi/coderhouse-backendIII.git
+    cd coderhouse-backendIII
+    npm install
+    ```
+  </Step>
+
+  <Step title="Configure environment">
+    Create a `.env` file in the root directory:
     
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
+    ```bash
+    PORT=8080
+    MONGO_URL=mongodb://127.0.0.1:27017
+    DB_NAME=adoptme
+    ```
     
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+    <Info>
+      For MongoDB Atlas, use your connection string: `mongodb+srv://username:password@cluster.mongodb.net`
+    </Info>
+  </Step>
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+  <Step title="Start the server">
+    Start the API server:
+    
+    ```bash
+    npm start
+    ```
+    
+    You should see:
+    
+    ```
+    Connection successful MongoDB
+    Listening on 8080
+    ```
+  </Step>
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+  <Step title="Make your first API call">
+    Test the API with a simple request:
+    
+    ```bash
+    curl http://localhost:8080/api/pets
+    ```
+    
+    Expected response:
+    
+    ```json
+    {
+      "status": "success",
+      "payload": []
+    }
+    ```
+    
+    <Note>
+      The response will be empty initially since no pets have been added yet.
+    </Note>
+  </Step>
+</Steps>
 
-### Step 3: Go live
+## Try the interactive documentation
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+The Adoptme API includes Swagger UI for interactive API exploration:
 
-## Next steps
+1. Open your browser and navigate to: `http://localhost:8080/docs`
+2. You'll see all available endpoints
+3. Click on any endpoint to expand it
+4. Click "Try it out" to make requests directly from the browser
 
-Now that you have your docs running, explore these key features:
+## Generate mock data
+
+Want to quickly populate your database with test data? Use the mock data endpoint:
+
+```bash
+curl -X POST "http://localhost:8080/api/mocks/generateData?user=5&pet=10"
+```
+
+This will create:
+- 5 mock users
+- 10 mock pets
+- Random adoption assignments
+
+Now when you call `GET /api/pets`, you'll see the generated pets!
+
+## What's next?
 
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Installation guide" icon="download" href="/installation">
+    Detailed setup instructions and troubleshooting
+  </Card>
+  <Card title="API reference" icon="code" href="/api/overview">
+    Explore all available endpoints
+  </Card>
+  <Card title="Authentication" icon="lock" href="/concepts/authentication">
+    Learn about JWT authentication
+  </Card>
+  <Card title="Mock data" icon="database" href="/development/mock-data">
+    Generate test data for development
+  </Card>
 </CardGroup>
 
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>
+## Live deployment
+
+Try the live API without installing anything:
+
+**Base URL:** https://coderhouse-backendiii-production.up.railway.app
+
+**Swagger Docs:** https://coderhouse-backendiii-production.up.railway.app/docs
+
+```bash
+# Example: Get all pets from the live API
+curl https://coderhouse-backendiii-production.up.railway.app/api/pets
+```

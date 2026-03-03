@@ -1,0 +1,374 @@
+---
+title: 'Mock Data Generation'
+description: 'Generate realistic test data for users and pets using Faker.js and the mocks API'
+---
+
+## Overview
+
+The Adoptme API provides mock data generation capabilities powered by **@faker-js/faker** (Spanish Mexican locale). This is essential for:
+
+- **Testing**: Populate test databases with realistic data
+- **Development**: Quickly create sample data for frontend development
+- **Demonstrations**: Generate demo data for presentations
+- **Load Testing**: Create large datasets for performance testing
+
+## Mock Generation Functions
+
+The API includes two core functions for generating mock data:
+
+### generaPet()
+
+Generates a random pet with realistic attributes:
+
+```javascript
+import { fakerES_MX as fa } from "@faker-js/faker";
+import { createHash } from "../utils/index.js";
+
+export const generaPet = () => {
+    let name = fa.animal.petName();
+    let specie = fa.animal.type();
+    let birthDate = fa.date.birthdate({ mode: 'age', min: 18, max: 65 });
+    let adopted = fa.datatype.boolean();
+    let image = fa.image.avatar();
+
+    let pet = {
+        name,
+        specie,
+        birthDate,
+        adopted,
+        image
+    };
+
+    if (adopted) {
+        pet.owner = fa.person.fullName();
+    }
+
+    return { pet };
+}
+```
+
+**Generated Fields:**
+- `name`: Random pet name (e.g., "Max", "Luna", "Rocky")
+- `specie`: Random animal type (e.g., "dog", "cat", "bird")
+- `birthDate`: Random birthdate (18-65 years old)
+- `adopted`: Boolean indicating adoption status
+- `image`: Random avatar URL
+- `owner`: Owner's full name (only if `adopted` is true)
+
+### generaUser()
+
+Generates a random user with hashed password:
+
+```javascript
+export const generaUser = async () => {
+    let first_name = fa.person.firstName();
+    let last_name = fa.person.lastName();
+    let email = fa.internet.email({
+        firstName: first_name,
+        lastName: last_name, 
+        provider: "gmail.com"
+    });
+    let password = await createHash('coder123');
+    let role = fa.helpers.arrayElement(['user', 'admin']);
+    let pets = [];
+
+    return {
+        first_name,
+        last_name,
+        email,
+        password,
+        role,
+        pets
+    };
+}
+```
+
+**Generated Fields:**
+- `first_name`: Random first name
+- `last_name`: Random last name  
+- `email`: Email address based on name (always @gmail.com)
+- `password`: Hashed version of "coder123"
+- `role`: Either "user" or "admin" (random)
+- `pets`: Empty array (can be populated later)
+
+<Info>
+  All generated users have the same password: **coder123** (hashed). This simplifies testing authentication flows.
+</Info>
+
+## Mock API Endpoints
+
+### GET /api/mocks/mockingusers
+
+Generates mock users without persisting them to the database. Useful for previewing data structure.
+
+**Query Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `cantidad` | number | 1 | Number of users to generate |
+
+**Example Request:**
+
+```bash
+GET /api/mocks/mockingusers?cantidad=5
+```
+
+**Example Response:**
+
+```json
+{
+  "usuarios": [
+    {
+      "first_name": "Juan",
+      "last_name": "García",
+      "email": "juan.garcia@gmail.com",
+      "password": "$2b$10$...",
+      "role": "user",
+      "pets": []
+    },
+    // ... 4 more users
+  ]
+}
+```
+
+**Implementation:**
+
+```javascript
+router.get('/mockingusers', (req, res) => {
+    let { cantidad } = req.query;
+    
+    if (cantidad < 0) {
+        return res.status(400).json({ error: "Cantidad enviada debe de ser positiva" });
+    }
+
+    if (!cantidad) cantidad = 1;
+
+    let usuarios = [];
+
+    for (let i = 0; i < cantidad; i++) {
+        usuarios.push(generaUser());
+    }
+
+    return res.status(200).json({ usuarios });
+});
+```
+
+<Warning>
+  Negative values for `cantidad` will return a 400 error. Always provide positive integers.
+</Warning>
+
+### POST /api/mocks/generateData
+
+Generates and **persists** mock users and pets to the database. Adopted pets are automatically assigned to random generated users.
+
+**Query Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `user` | number | 1 | Number of users to create |
+| `pet` | number | 1 | Number of pets to create |
+
+**Example Request:**
+
+```bash
+POST /api/mocks/generateData?user=10&pet=20
+```
+
+**Example Response:**
+
+```json
+{
+  "message": "Datos generados exitosamente",
+  "users": [
+    {
+      "_id": "507f1f77bcf86cd799439011",
+      "first_name": "María",
+      "last_name": "López",
+      "email": "maria.lopez@gmail.com",
+      "role": "admin",
+      "pets": []
+    }
+    // ... more users
+  ],
+  "pets": [
+    {
+      "_id": "507f1f77bcf86cd799439012",
+      "name": "Max",
+      "specie": "dog",
+      "birthDate": "2020-05-15T00:00:00.000Z",
+      "adopted": true,
+      "owner": "507f1f77bcf86cd799439011",
+      "image": "https://..."
+    }
+    // ... more pets
+  ]
+}
+```
+
+**Implementation Details:**
+
+```javascript
+router.post('/generateData', async (req, res) => {
+    try {
+        let { user, pet } = req.query;
+
+        user = parseInt(user) || 1;
+        pet = parseInt(pet) || 1;
+
+        if (user < 0 || pet < 0) {
+            return res.status(400).json({ error: "Cantidad enviada debe de ser positiva" });
+        }
+
+        // Generate users
+        let users = [];
+        for (let i = 0; i < user; i++) {
+            users.push(await generaUser());
+        }
+
+        // Insert users into database
+        const usersInsertados = await userModel.insertMany(users);
+
+        let pets = [];
+
+        // Generate pets
+        for (let i = 0; i < pet; i++) {
+            let generaData = generaPet().pet;
+
+            // If pet is adopted, assign a random owner from generated users
+            if (generaData.adopted) {
+                const randomUser = usersInsertados[Math.floor(Math.random() * usersInsertados.length)];
+                generaData.owner = randomUser._id;
+            }
+
+            pets.push(generaData);
+        }
+
+        // Insert pets into database
+        const petsInsertados = await petModel.insertMany(pets);
+
+        return res.status(201).json({
+            message: 'Datos generados exitosamente',
+            users: usersInsertados,
+            pets: petsInsertados
+        });
+
+    } catch (error) {
+        console.error("Error generando datos:", error);
+        return res.status(500).json({ error: "Error interno del servidor" });
+    }
+});
+```
+
+<Note>
+  Adopted pets are automatically linked to randomly selected users from the same generation batch. This creates realistic ownership relationships.
+</Note>
+
+## Usage Examples
+
+### Quick Test Data Setup
+
+<Steps>
+  <Step title="Generate sample data">
+    Create 5 users and 10 pets:
+    ```bash
+    curl -X POST "http://localhost:8080/api/mocks/generateData?user=5&pet=10"
+    ```
+  </Step>
+  
+  <Step title="Verify data creation">
+    Check that users were created:
+    ```bash
+    curl http://localhost:8080/api/users
+    ```
+  </Step>
+  
+  <Step title="Check pet assignments">
+    View pets and their owners:
+    ```bash
+    curl http://localhost:8080/api/pets
+    ```
+  </Step>
+</Steps>
+
+### Load Testing Scenario
+
+Generate a large dataset for performance testing:
+
+```bash
+# Create 1000 users and 5000 pets
+curl -X POST "http://localhost:8080/api/mocks/generateData?user=1000&pet=5000"
+```
+
+### Preview Data Structure
+
+Preview mock data without database insertion:
+
+```bash
+# Generate 3 sample users (not persisted)
+curl "http://localhost:8080/api/mocks/mockingusers?cantidad=3"
+```
+
+## Error Handling
+
+### Negative Quantities
+
+```bash
+POST /api/mocks/generateData?user=-5
+```
+
+**Response:** `400 Bad Request`
+```json
+{
+  "error": "Cantidad enviada debe de ser positiva"
+}
+```
+
+### Server Errors
+
+If database insertion fails:
+
+**Response:** `500 Internal Server Error`
+```json
+{
+  "error": "Error interno del servidor"
+}
+```
+
+## Integration with Tests
+
+The mock endpoints are extensively tested:
+
+```javascript
+it("Si quiero generar 1 usuario y 1 mascota, al apuntar al endpoint /api/mocks/generateData metodo POST sin pasarle cantidad, da de alta 1 usuario y 1 mascota en DB", async() => {
+    let {status, body} = await requester.post(`/api/mocks/generateData`).send();
+    expect(status).to.be.eq(201);
+    expect(Array(body));
+    expect(body.message).to.be.eq("Datos generados exitosamente");
+});
+```
+
+See the [Testing Guide](/development/testing) for more test examples.
+
+## Best Practices
+
+1. **Use mockingusers for previews** - Test data structure without database writes
+2. **Use generateData for integration tests** - Create realistic test scenarios
+3. **Clean up after tests** - Delete generated data to avoid database bloat
+4. **Limit quantities in CI/CD** - Large datasets can slow down automated tests
+5. **Leverage default values** - Omit parameters for simple single-entity creation
+
+## Faker.js Locale
+
+The API uses **@faker-js/faker** with the **Spanish (Mexico)** locale:
+
+```javascript
+import { fakerES_MX as fa } from "@faker-js/faker";
+```
+
+This generates culturally appropriate names, emails, and data for Spanish-speaking users.
+
+## Next Steps
+
+- Write [automated tests](/development/testing) using mock data
+- Configure your [development environment](/development/environment)
+- Explore [API endpoints](/api/overview) for user and pet management

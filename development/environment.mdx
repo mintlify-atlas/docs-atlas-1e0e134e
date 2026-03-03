@@ -1,0 +1,396 @@
+---
+title: 'Development Environment'
+description: 'Set up your local development environment for the Adoptme API'
+---
+
+## Prerequisites
+
+<Note>
+  **Node.js v22 or higher is required** to run this project. Older versions are not supported.
+</Note>
+
+Verify your Node.js version:
+
+```bash
+node --version
+```
+
+If you need to upgrade, download the latest version from [nodejs.org](https://nodejs.org).
+
+## Installation Steps
+
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone https://github.com/GitRepoFabi/coderhouse-backendIII.git .
+    ```
+  </Step>
+  
+  <Step title="Install dependencies">
+    ```bash
+    npm install
+    ```
+    This installs all production and development dependencies including:
+    - Express.js for the API server
+    - Mongoose for MongoDB interactions
+    - Mocha, Chai, and Supertest for testing
+    - Faker for mock data generation
+  </Step>
+  
+  <Step title="Configure environment variables">
+    Create a `.env` file in the project root with the required configuration:
+    ```bash
+    PORT=8080
+    MONGO_URL=mongodb://127.0.0.1:27017
+    DB_NAME=adoptme
+    ```
+  </Step>
+  
+  <Step title="Start MongoDB">
+    Ensure MongoDB is running locally on port 27017, or update `MONGO_URL` to point to your MongoDB instance.
+  </Step>
+  
+  <Step title="Start the development server">
+    ```bash
+    npm run dev
+    ```
+    This uses nodemon for automatic restart on file changes.
+  </Step>
+</Steps>
+
+## Environment Variables
+
+The application uses `dotenv` to load configuration from a `.env` file. All environment variables are defined in `src/config/config.js`:
+
+```javascript
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+export default {
+    PORT: process.env.PORT || 8080,
+    MONGO_URL: process.env.MONGO_URL || 'mongodb://127.0.0.1:27017',
+    DB_NAME: process.env.DB_NAME || 'adoptme'
+}
+```
+
+### Configuration Reference
+
+| Variable | Default | Required | Description |
+|----------|---------|----------|-------------|
+| `PORT` | `8080` | No | Port number for the Express server |
+| `MONGO_URL` | `mongodb://127.0.0.1:27017` | **Yes** | MongoDB connection URL |
+| `DB_NAME` | `adoptme` | **Yes** | MongoDB database name |
+
+<Warning>
+  **MONGO_URL** and **DB_NAME** are critical. The application connects to MongoDB at startup and will fail if the database is unreachable.
+</Warning>
+
+### Example Configurations
+
+<CodeGroup>
+
+```bash Local Development
+PORT=8080
+MONGO_URL=mongodb://127.0.0.1:27017
+DB_NAME=adoptme
+```
+
+```bash Docker Container
+PORT=3000
+MONGO_URL=mongodb://mongo:27017
+DB_NAME=adoptme
+```
+
+```bash MongoDB Atlas
+PORT=8080
+MONGO_URL=mongodb+srv://username:password@cluster.mongodb.net
+DB_NAME=adoptme_production
+```
+
+```bash Testing
+PORT=8080
+MONGO_URL=mongodb://127.0.0.1:27017
+DB_NAME=adoptme_test
+```
+
+</CodeGroup>
+
+## NPM Scripts
+
+The project includes several npm scripts for different use cases:
+
+```json
+{
+  "scripts": {
+    "start": "node src/app.js",
+    "dev": "nodemon src/app.js",
+    "test": "mocha test/supertest.test.js --exit"
+  }
+}
+```
+
+### Available Commands
+
+| Command | Description | Use Case |
+|---------|-------------|----------|
+| `npm start` | Start the production server | Production deployment |
+| `npm run dev` | Start development server with nodemon | Local development |
+| `npm test` | Run test suite with Mocha | Testing and CI/CD |
+
+<Info>
+  Use **npm run dev** during development. Nodemon automatically restarts the server when you save file changes.
+</Info>
+
+## Development vs Production
+
+### Development Mode
+
+```bash
+npm run dev
+```
+
+**Features:**
+- Auto-restart on file changes (nodemon)
+- Detailed error messages
+- Local MongoDB connection
+- Verbose logging
+
+**Recommended Settings:**
+```bash
+PORT=8080
+MONGO_URL=mongodb://127.0.0.1:27017
+DB_NAME=adoptme_dev
+```
+
+### Production Mode
+
+```bash
+npm start
+```
+
+**Features:**
+- Single process (no auto-restart)
+- Optimized error handling
+- Remote MongoDB connection (MongoDB Atlas)
+- Production logging
+
+**Recommended Settings:**
+```bash
+PORT=3000
+MONGO_URL=mongodb+srv://user:pass@cluster.mongodb.net
+DB_NAME=adoptme
+```
+
+## MongoDB Setup
+
+### Local MongoDB
+
+1. Install MongoDB Community Edition
+2. Start the MongoDB service:
+   ```bash
+   # macOS (with Homebrew)
+   brew services start mongodb-community
+   
+   # Linux (systemd)
+   sudo systemctl start mongod
+   
+   # Windows
+   net start MongoDB
+   ```
+3. Verify it's running:
+   ```bash
+   mongosh
+   ```
+
+### MongoDB Atlas (Cloud)
+
+1. Create a free cluster at [mongodb.com/atlas](https://www.mongodb.com/atlas)
+2. Add your IP address to the allowlist
+3. Create a database user
+4. Copy the connection string:
+   ```bash
+   MONGO_URL=mongodb+srv://<username>:<password>@cluster.mongodb.net
+   ```
+
+## Debugging Tips
+
+### Server Won't Start
+
+**Check port availability:**
+```bash
+# macOS/Linux
+lsof -i :8080
+
+# Windows
+netstat -ano | findstr :8080
+```
+
+**Solution:** Kill the process using the port or change `PORT` in `.env`
+
+### Database Connection Errors
+
+**Error:** `MongoServerError: connect ECONNREFUSED`
+
+**Solutions:**
+1. Verify MongoDB is running
+2. Check `MONGO_URL` in `.env`
+3. Test connection with mongosh:
+   ```bash
+   mongosh mongodb://127.0.0.1:27017
+   ```
+
+### Environment Variables Not Loading
+
+**Error:** Application uses default values instead of `.env` values
+
+**Solutions:**
+1. Ensure `.env` is in the project root
+2. Check file name (exactly `.env`, not `env.txt` or `.env.local`)
+3. Restart the server after modifying `.env`
+
+### Test Failures
+
+**Error:** Tests timeout or fail to connect
+
+**Solutions:**
+1. Ensure MongoDB is running
+2. Check that the database is accessible
+3. Verify `DB_NAME` in `.env`
+4. Run tests with increased timeout:
+   ```javascript
+   this.timeout(10_000); // 10 seconds
+   ```
+
+## Docker Development
+
+### Building the Image
+
+```bash
+docker build -t adoptme-api:1.0.0 .
+```
+
+### Running with Docker
+
+```bash
+docker run -p 8080:3000 \
+  -e PORT=3000 \
+  -e MONGO_URL=mongodb://host.docker.internal:27017 \
+  -e DB_NAME=adoptme \
+  adoptme-api:1.0.0
+```
+
+<Note>
+  When running in Docker, use `host.docker.internal` instead of `localhost` to access the host machine's MongoDB.
+</Note>
+
+### Docker Compose
+
+Create a `docker-compose.yml` for a complete development stack:
+
+```yaml
+version: '3.8'
+
+services:
+  api:
+    build: .
+    ports:
+      - "8080:3000"
+    environment:
+      - PORT=3000
+      - MONGO_URL=mongodb://mongo:27017
+      - DB_NAME=adoptme
+    depends_on:
+      - mongo
+
+  mongo:
+    image: mongo:6
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+
+volumes:
+  mongo-data:
+```
+
+Start the stack:
+```bash
+docker-compose up
+```
+
+## Project Structure
+
+```
+adoptme-api/
+├── src/
+│   ├── app.js              # Application entry point
+│   ├── config/
+│   │   └── config.js       # Environment configuration
+│   ├── dao/
+│   │   └── models/         # MongoDB models
+│   ├── mocks/
+│   │   └── mocks.js        # Mock data generators
+│   ├── routes/
+│   │   ├── users.router.js
+│   │   ├── pets.router.js
+│   │   └── mocks.router.js
+│   └── utils/              # Utility functions
+├── test/
+│   └── supertest.test.js   # API tests
+├── .env                    # Environment variables (create this)
+├── package.json
+└── README.md
+```
+
+## IDE Setup
+
+### VS Code Recommended Extensions
+
+- **ESLint**: Linting and code quality
+- **Prettier**: Code formatting
+- **MongoDB for VS Code**: Database exploration
+- **REST Client**: Test API endpoints
+- **Thunder Client**: Alternative API client
+
+### VS Code Settings
+
+Create `.vscode/settings.json`:
+
+```json
+{
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "javascript.preferences.quoteStyle": "single"
+}
+```
+
+## Common Development Workflows
+
+### Making Code Changes
+
+1. Start development server: `npm run dev`
+2. Make changes to source files
+3. Nodemon automatically restarts the server
+4. Test changes with REST client or browser
+
+### Adding New Endpoints
+
+1. Create/modify router in `src/routes/`
+2. Add tests in `test/supertest.test.js`
+3. Run tests: `npm test`
+4. Document in API reference
+
+### Testing Locally
+
+1. Ensure MongoDB is running
+2. Run test suite: `npm test`
+3. Check test output for failures
+4. Fix issues and re-run tests
+
+## Next Steps
+
+- Write [automated tests](/development/testing) for your changes
+- Generate [mock data](/development/mock-data) for development
+- Explore the [API Reference](/api/overview) to understand available endpoints
+- Set up CI/CD for automated testing and deployment

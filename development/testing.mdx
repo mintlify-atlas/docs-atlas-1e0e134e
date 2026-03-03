@@ -1,0 +1,243 @@
+---
+title: 'Testing Guide'
+description: 'Learn how to run and write tests for the Adoptme API using Mocha, Chai, and Supertest'
+---
+
+## Overview
+
+The Adoptme API uses a comprehensive testing stack to ensure reliability and correctness:
+
+- **Mocha**: Test framework for organizing and running tests
+- **Chai**: Assertion library for writing test expectations
+- **Supertest**: HTTP assertion library for testing API endpoints
+- **Mongoose**: Direct database connection for setup and teardown
+
+## Running Tests
+
+<Steps>
+  <Step title="Install dependencies">
+    Make sure all testing dependencies are installed:
+    ```bash
+    npm install
+    ```
+  </Step>
+  
+  <Step title="Configure environment">
+    Ensure your `.env` file has the correct database configuration:
+    ```bash
+    PORT=8080
+    MONGO_URL=mongodb://127.0.0.1:27017
+    DB_NAME=adoptme
+    ```
+  </Step>
+  
+  <Step title="Run the test suite">
+    Execute all tests using the npm test command:
+    ```bash
+    npm test
+    ```
+    This runs `mocha test/supertest.test.js --exit`
+  </Step>
+</Steps>
+
+## Test Structure
+
+Tests are organized using Mocha's `describe` and `it` blocks. Each test suite connects to MongoDB and uses Supertest to make HTTP requests.
+
+### Basic Setup
+
+```javascript
+import { describe, it } from "mocha";
+import supertest from "supertest";
+import { expect } from "chai";
+import config from "../src/config/config.js";
+import mongoose, { isValidObjectId } from "mongoose";
+
+const requester = supertest(`http://localhost:${config.PORT}`);
+
+// Connect to database before tests
+await mongoose.connect(config.MONGO_URL, {dbName: config.DB_NAME});
+```
+
+## Test Timeout Configuration
+
+Long-running tests (such as database operations) require increased timeout values:
+
+```javascript
+describe("Pruebas router pets", function(){
+    this.timeout(10_000) // 10 seconds timeout
+    
+    // Tests go here...
+});
+```
+
+<Note>
+  The default Mocha timeout is 2 seconds. Database operations and HTTP requests often need 10+ seconds.
+</Note>
+
+## Cleanup and Teardown
+
+Tests should clean up test data after execution using Mocha's `after` hook:
+
+```javascript
+describe("Pruebas router pets", function(){
+    this.timeout(10_000);
+
+    after(async()=>{
+        // Delete all test pets with specie "test"
+        await mongoose.connection.collection("pets").deleteMany({specie:"test"});
+    });
+    
+    // Tests...
+});
+```
+
+## Test Examples
+
+<CodeGroup>
+
+```javascript Pets Router - GET All Pets
+it("Si consulto todas las mascotas al endpoint /api/pets metodo GET, me debería devolver un array de mascotas", async() => {
+    let {body} = await requester.get("/api/pets").send();
+    expect(Array(body.payload));
+});    
+```
+
+```javascript Pets Router - POST Create Pet
+it("Si envío los datos correctos de una mascota al /api/pets metodo POST, da de alta la mascota en DB", async()=>{
+    let petMock={
+        name: "Rocky", 
+        specie: "test", 
+        birthDate: new Date(2025, 11, 18).toUTCString()
+    };
+
+    let {status, body} = await requester.post("/api/pets").send(petMock);
+    expect(status).to.be.eq(200);
+    expect(body.payload).to.has.property("_id");
+    expect(isValidObjectId(body.payload._id)).to.be.true;
+});
+```
+
+```javascript Pets Router - Validation Error
+it("Si envío los datos de la mascota sin el campo name al /api/pets metodo POST, me debería dar un error", async()=>{
+    let petMock={
+        // name: "Rocky", // Missing required field
+        specie: "test", 
+        birthDate: new Date(2025, 11, 18).toUTCString()
+    };
+
+    let {status} = await requester.post("/api/pets").send(petMock);
+    expect(status).to.be.eq(400);
+});    
+```
+
+```javascript Users Router - GET All Users
+it("Si consulto todos los usuarios al endpoint /api/users metodo GET, me debería devolver un array de usuarios", async() => {
+    let {body} = await requester.get("/api/users").send();
+    expect(Array(body.payload));
+});        
+```
+
+```javascript Mocks Router - Generate Data
+it("Si quiero generar N usuarios y N mascotas, al apuntar al endpoint /api/mocks/generateData metodo POST pasándole la cantidad deseada, da de alta los N usuarios y las N mascotas en DB", async() => {
+    let usuarios = 3;
+    let mascotas = 3;
+
+    let {status, body} = await requester.post(`/api/mocks/generateData/?user=${usuarios}&pets=${mascotas}`).send();
+    expect(status).to.be.eq(201);
+    expect(Array(body));
+    expect(body.message).to.be.eq("Datos generados exitosamente");
+});    
+```
+
+```javascript Mocks Router - Validation Error
+it("Si al apuntar al endpoint /api/mocks/generateData metodo POST le paso una cantidad negativa en el parámetro para generar un usuario, debe de dar error", async() => {
+    let user = -1;
+    let {status} = await requester.post(`/api/mocks/generateData/?user=${user}`).send();
+    expect(status).to.be.eq(400);
+});    
+```
+
+</CodeGroup>
+
+## Writing New Tests
+
+When writing new tests, follow these patterns:
+
+### 1. Test Successful Operations
+
+Verify that valid requests return expected status codes and data structures:
+
+```javascript
+it("Should create a new resource", async() => {
+    let mockData = { /* valid data */ };
+    let {status, body} = await requester.post("/api/endpoint").send(mockData);
+    
+    expect(status).to.be.eq(200);
+    expect(body).to.has.property("_id");
+});
+```
+
+### 2. Test Validation Errors
+
+Verify that invalid requests are properly rejected:
+
+```javascript
+it("Should return 400 for missing required field", async() => {
+    let invalidData = { /* missing required field */ };
+    let {status} = await requester.post("/api/endpoint").send(invalidData);
+    
+    expect(status).to.be.eq(400);
+});
+```
+
+### 3. Test Edge Cases
+
+Check boundary conditions like negative numbers, empty arrays, etc.:
+
+```javascript
+it("Should reject negative quantities", async() => {
+    let {status} = await requester.get("/api/endpoint?count=-1").send();
+    expect(status).to.be.eq(400);
+});
+```
+
+<Warning>
+  Always clean up test data in the `after` hook to prevent test pollution and database bloat.
+</Warning>
+
+## Common Assertions
+
+### Status Code Assertions
+
+```javascript
+expect(status).to.be.eq(200);  // Success
+expect(status).to.be.eq(201);  // Created
+expect(status).to.be.eq(400);  // Bad Request
+expect(status).to.be.eq(404);  // Not Found
+expect(status).to.be.eq(500);  // Server Error
+```
+
+### Data Structure Assertions
+
+```javascript
+expect(Array(body.payload));                    // Is an array
+expect(body.payload).to.has.property("_id");   // Has property
+expect(isValidObjectId(body.payload._id)).to.be.true;  // Valid MongoDB ObjectId
+expect(body.message).to.be.eq("Expected message");     // Exact match
+```
+
+## Best Practices
+
+1. **Use descriptive test names** - Write test descriptions in your preferred language that clearly explain what is being tested
+2. **Test one thing per test** - Each `it` block should verify a single behavior
+3. **Use consistent mock data** - Create reusable mock objects with clear identifiers (e.g., `specie: "test"`)
+4. **Clean up after tests** - Always use `after` hooks to remove test data
+5. **Set appropriate timeouts** - Database operations need longer timeouts than the default 2 seconds
+6. **Test both success and failure cases** - Verify that errors are properly handled
+
+## Next Steps
+
+- Learn about [mock data generation](/development/mock-data) for testing
+- Configure your [development environment](/development/environment)
+- Explore the [API Reference](/api/overview) for endpoint specifications

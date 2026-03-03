@@ -1,0 +1,500 @@
+---
+title: Mocks API
+description: Generate mock users and pets for testing and development purposes
+---
+
+## Overview
+
+The Mocks API provides endpoints for generating fake data to populate your development database. This is useful for testing, demos, and development without manually creating users and pets.
+
+**Base Path:** `/api/mocks`
+
+**Source Files:**
+- Routes: `src/routes/mocks.router.js`
+- Mock Generators: `src/mocks/mocks.js`
+
+<Note>
+  Mock data is generated using the Faker library and follows the same schema as real users and pets.
+</Note>
+
+---
+
+## Generate Mock Users
+
+<CodeGroup>
+```bash cURL
+curl -X GET "http://localhost:8080/api/mocks/mockingusers?cantidad=5"
+```
+
+```javascript JavaScript
+const cantidad = 5;
+fetch(`http://localhost:8080/api/mocks/mockingusers?cantidad=${cantidad}`)
+  .then(res => res.json())
+  .then(data => console.log(data));
+```
+
+```python Python
+import requests
+
+response = requests.get(
+    'http://localhost:8080/api/mocks/mockingusers',
+    params={'cantidad': 5}
+)
+print(response.json())
+```
+</CodeGroup>
+
+### Endpoint
+
+```
+GET /api/mocks/mockingusers
+```
+
+Generates mock user objects without saving them to the database. Returns an array of user objects that can be used for testing.
+
+### Query Parameters
+
+<ParamField query="cantidad" type="integer" default="1">
+  Number of mock users to generate. Must be a positive number.
+</ParamField>
+
+### Response
+
+<ResponseField name="usuarios" type="array">
+  Array of generated user objects
+</ResponseField>
+
+### Example Response
+
+```json
+{
+  "usuarios": [
+    {
+      "first_name": "Jerónimo",
+      "last_name": "Arroyo Alonzo",
+      "email": "Jeronimo_ArroyoAlonzo63@gmail.com",
+      "password": "xjkkakjsiz",
+      "role": "user",
+      "pets": []
+    },
+    {
+      "first_name": "María",
+      "last_name": "González Pérez",
+      "email": "Maria_Gonzalez42@yahoo.com",
+      "password": "abcd1234",
+      "role": "user",
+      "pets": []
+    }
+  ]
+}
+```
+
+### Implementation Details
+
+From `src/routes/mocks.router.js:8-22`:
+
+```javascript
+router.get('/mockingusers', (req, res) => {
+    let { cantidad } = req.query;
+    if (cantidad < 0) {
+        return res.status(400).json({ error: "Cantidad enviada debe de ser positiva" })
+    }
+
+    if (!cantidad) cantidad = 1;
+
+    let usuarios = []
+
+    for (let i = 0; i < cantidad; i++) {
+        usuarios.push(generaUser())
+    }
+
+    return res.status(200).json({ usuarios });
+});
+```
+
+<Note>
+  These users are **not saved** to the database. They're only generated and returned in the response. Use `/generateData` to save mock data to the database.
+</Note>
+
+### Error Responses
+
+<Expandable title="400 Negative Quantity">
+```json
+{
+  "error": "Cantidad enviada debe de ser positiva"
+}
+```
+Returned when cantidad is less than 0.
+</Expandable>
+
+---
+
+## Generate and Save Mock Data
+
+<CodeGroup>
+```bash cURL
+curl -X POST "http://localhost:8080/api/mocks/generateData?user=10&pet=20"
+```
+
+```javascript JavaScript
+fetch('http://localhost:8080/api/mocks/generateData?user=10&pet=20', {
+  method: 'POST'
+})
+.then(res => res.json())
+.then(data => console.log(data));
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    'http://localhost:8080/api/mocks/generateData',
+    params={'user': 10, 'pet': 20}
+)
+print(response.json())
+```
+</CodeGroup>
+
+### Endpoint
+
+```
+POST /api/mocks/generateData
+```
+
+Generates mock users and pets and **saves them to the database**. Some generated pets may be randomly assigned to generated users as adopted pets.
+
+### Query Parameters
+
+<ParamField query="user" type="integer" default="1">
+  Number of mock users to generate and save. Must be a positive number.
+</ParamField>
+
+<ParamField query="pet" type="integer" default="1">
+  Number of mock pets to generate and save. Must be a positive number.
+</ParamField>
+
+### Business Logic
+
+The endpoint performs the following operations:
+
+1. Generates N users using the `generaUser()` function
+2. Inserts all users into the database using `insertMany()`
+3. Generates M pets using the `generaPet()` function
+4. For pets that are randomly marked as "adopted":
+   - Assigns a random user from the generated users as the owner
+   - Sets the `owner` field to that user's ObjectId
+5. Inserts all pets into the database using `insertMany()`
+6. Returns both arrays of created users and pets
+
+### Implementation Details
+
+From `src/routes/mocks.router.js:25-72`:
+
+```javascript
+router.post('/generateData', async (req, res) => {
+    try {
+        let { user, pet } = req.query;
+
+        user = parseInt(user) || 1;
+        pet = parseInt(pet) || 1;
+
+        if (user < 0 || pet < 0) {
+            return res.status(400).json({ error: "Cantidad enviada debe de ser positiva" });
+        }
+
+        //Genero usuarios según el largo recibido por parámetro
+        let users = [];
+        for (let i = 0; i < user; i++) {
+            users.push(await generaUser());
+        }
+
+        //Inserto los datos del array en la BD
+        const usersInsertados = await userModel.insertMany(users);
+
+        let pets = [];
+
+        //Genero mascotas según el largo recibido por parámetro
+        for (let i = 0; i < pet; i++) {
+            let generaData = generaPet().pet;
+
+            if (generaData.adopted) {
+                const randomUser = usersInsertados[Math.floor(Math.random() * usersInsertados.length)];
+                generaData.owner = randomUser._id;
+            }
+
+            pets.push(generaData);
+        }
+
+        //Inserto los datos del array en la BD
+        const petsInsertados = await petModel.insertMany(pets);
+
+        return res.status(201).json({
+            message: 'Datos generados exitosamente',
+            users: usersInsertados,
+            pets: petsInsertados
+        });
+
+    } catch (error) {
+        console.error("Error generando datos:", error);
+        return res.status(500).json({ error: "Error interno del servidor" });
+    }
+});
+```
+
+### Response
+
+<ResponseField name="message" type="string">
+  Success message: "Datos generados exitosamente"
+</ResponseField>
+
+<ResponseField name="users" type="array">
+  Array of created user objects with MongoDB ObjectIds
+</ResponseField>
+
+<ResponseField name="pets" type="array">
+  Array of created pet objects with MongoDB ObjectIds
+</ResponseField>
+
+### Example Response
+
+```json
+{
+  "message": "Datos generados exitosamente",
+  "users": [
+    {
+      "_id": "6893eaba2ac0b16fa177be7e",
+      "first_name": "Carlos",
+      "last_name": "Ramírez",
+      "email": "carlos.ramirez@example.com",
+      "password": "$2b$10$hashedpassword...",
+      "role": "user",
+      "pets": []
+    },
+    {
+      "_id": "6893eaba2ac0b16fa177be7f",
+      "first_name": "Ana",
+      "last_name": "López",
+      "email": "ana.lopez@example.com",
+      "password": "$2b$10$hashedpassword...",
+      "role": "user",
+      "pets": []
+    }
+  ],
+  "pets": [
+    {
+      "_id": "65abc123def456793",
+      "name": "Rex",
+      "specie": "dog",
+      "birthDate": "2020-06-15T00:00:00.000Z",
+      "adopted": false
+    },
+    {
+      "_id": "65abc123def456794",
+      "name": "Mittens",
+      "specie": "cat",
+      "birthDate": "2021-03-22T00:00:00.000Z",
+      "adopted": true,
+      "owner": "6893eaba2ac0b16fa177be7e"
+    }
+  ]
+}
+```
+
+### Adopted Pets Logic
+
+When a pet is randomly generated as "adopted":
+
+```javascript
+if (generaData.adopted) {
+    const randomUser = usersInsertados[Math.floor(Math.random() * usersInsertados.length)];
+    generaData.owner = randomUser._id;
+}
+```
+
+This means:
+- Some pets will have `adopted: true` and an `owner` field
+- The owner is randomly selected from the users that were just created
+- However, the user's `pets` array is **not updated** (unlike in the real adoption flow)
+
+<Warning>
+  Mock adopted pets do not update the user's `pets` array. This creates inconsistent data compared to real adoptions. This is acceptable for testing but be aware of the discrepancy.
+</Warning>
+
+### Error Responses
+
+<Expandable title="400 Negative Quantity">
+```json
+{
+  "error": "Cantidad enviada debe de ser positiva"
+}
+```
+Returned when user or pet count is less than 0.
+</Expandable>
+
+<Expandable title="500 Error Generating Data">
+```json
+{
+  "error": "Error interno del servidor"
+}
+```
+Returned when database insertion fails or other server errors occur.
+</Expandable>
+
+---
+
+## Mock Data Structure
+
+### Generated User Fields
+
+Mock users are generated by `generaUser()` from `src/mocks/mocks.js` and include:
+
+- `first_name`: Random Spanish first name
+- `last_name`: Random Spanish last name (compound)
+- `email`: Random email address
+- `password`: Random alphanumeric string (in production, this would be hashed)
+- `role`: Always "user"
+- `pets`: Empty array `[]`
+
+### Generated Pet Fields
+
+Mock pets are generated by `generaPet()` from `src/mocks/mocks.js` and include:
+
+- `name`: Random pet name
+- `specie`: Random species (dog, cat, bird, etc.)
+- `birthDate`: Random date
+- `adopted`: Randomly true or false
+- `owner`: Set if adopted is true (references a user)
+- `image`: May or may not be included
+
+---
+
+## Usage Examples
+
+### Example 1: Generate Test Users Only
+
+Generate 50 mock users without saving to database:
+
+```bash
+curl -X GET "http://localhost:8080/api/mocks/mockingusers?cantidad=50"
+```
+
+Use case: Preview mock data structure, testing client-side components
+
+### Example 2: Populate Development Database
+
+Generate and save 100 users and 200 pets:
+
+```bash
+curl -X POST "http://localhost:8080/api/mocks/generateData?user=100&pet=200"
+```
+
+Use case: Populate a development database with test data
+
+### Example 3: Generate Default Amount
+
+Generate 1 user and 1 pet (defaults):
+
+```bash
+curl -X POST "http://localhost:8080/api/mocks/generateData"
+```
+
+### Example 4: Generate Only Pets
+
+Generate 1 user (required for potential adoption) and 50 pets:
+
+```bash
+curl -X POST "http://localhost:8080/api/mocks/generateData?user=1&pet=50"
+```
+
+---
+
+## Swagger Documentation Reference
+
+From `src/docs/documentacion.yaml:9-34`:
+
+```yaml
+/api/mocks/generateData:
+  parameters: []
+  post:
+    summary: Generar usuarios/mascotas con parámetros
+    tags:
+      - Mock
+    parameters:
+      - name: user
+        in: query
+        required: false
+        example: '1'
+        schema:
+          type: integer
+      - name: pet
+        in: query
+        required: false
+        example: '1'
+        schema:
+          type: integer
+    responses: 
+      '201':
+        description: Datos generados exitosamente
+      '400':
+        description: Cantidad enviada debe de ser positiva
+      '500':
+        description: Error interno del servidor
+```
+
+---
+
+## Considerations
+
+<Note>
+  **Database Impact:** The `/generateData` endpoint directly inserts data into your MongoDB database. Use with caution in production environments.
+</Note>
+
+<Note>
+  **Bulk Operations:** The endpoint uses `insertMany()` which is efficient for bulk inserts but doesn't trigger Mongoose middleware or validation hooks.
+</Note>
+
+<Warning>
+  **Data Consistency:** Mock adoptions don't update the user's `pets` array, creating inconsistent data. Real adoptions use the Adoptions API which properly updates both user and pet records.
+</Warning>
+
+<Note>
+  **Password Hashing:** Mock user passwords may or may not be hashed depending on the `generaUser()` implementation. Check `src/mocks/mocks.js` for details.
+</Note>
+
+---
+
+## Implementation Files
+
+### Router
+
+`src/routes/mocks.router.js` - Defines the two mock endpoints
+
+### Mock Generator Functions
+
+`src/mocks/mocks.js` - Contains:
+- `generaUser()` - Generates a single mock user
+- `generaPet()` - Generates a single mock pet
+
+These functions likely use Faker.js or a similar library to generate realistic fake data.
+
+### Models Used
+
+```javascript
+import userModel from '../dao/models/User.js';
+import petModel from '../dao/models/Pet.js';
+```
+
+Direct model imports allow bulk insertion via `insertMany()`.
+
+---
+
+## Related Endpoints
+
+<CardGroup cols={2}>
+  <Card title="Users API" icon="users" href="/api/users">
+    View and manage generated mock users
+  </Card>
+  <Card title="Pets API" icon="paw" href="/api/pets">
+    View and manage generated mock pets
+  </Card>
+</CardGroup>

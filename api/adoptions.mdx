@@ -1,0 +1,511 @@
+---
+title: Adoptions API
+description: Create and manage adoption records that link users to pets in the Adoptme system
+---
+
+## Overview
+
+The Adoptions API manages the relationship between users and pets when an adoption occurs. When a user adopts a pet, an adoption record is created, the pet is marked as adopted, and the pet is added to the user's pets array.
+
+**Base Path:** `/api/adoptions`
+
+**Source Files:**
+- Routes: `src/routes/adoption.router.js`
+- Controller: `src/controllers/adoptions.controller.js`
+- Model: `src/dao/models/Adoption.js`
+
+## Adoption Model
+
+The Adoption schema is a simple join table that links users to pets:
+
+<ResponseField name="_id" type="ObjectId" required>
+  MongoDB-generated unique identifier
+</ResponseField>
+
+<ResponseField name="owner" type="ObjectId" required>
+  Reference to the User (ObjectId from Users collection)
+</ResponseField>
+
+<ResponseField name="pet" type="ObjectId" required>
+  Reference to the Pet (ObjectId from Pets collection)
+</ResponseField>
+
+---
+
+## Get All Adoptions
+
+<CodeGroup>
+```bash cURL
+curl -X GET http://localhost:8080/api/adoptions
+```
+
+```javascript JavaScript
+fetch('http://localhost:8080/api/adoptions')
+  .then(res => res.json())
+  .then(data => console.log(data));
+```
+
+```python Python
+import requests
+
+response = requests.get('http://localhost:8080/api/adoptions')
+print(response.json())
+```
+</CodeGroup>
+
+### Endpoint
+
+```
+GET /api/adoptions
+```
+
+Retrieves a list of all adoptions in the system.
+
+### Response
+
+<ResponseField name="status" type="string">
+  "success"
+</ResponseField>
+
+<ResponseField name="payload" type="array">
+  Array of adoption objects
+</ResponseField>
+
+### Example Response
+
+```json
+{
+  "status": "success",
+  "payload": [
+    {
+      "_id": "65def789abc123456",
+      "owner": "6893eaba2ac0b16fa177be7a",
+      "pet": "65abc123def456790"
+    },
+    {
+      "_id": "65def789abc123457",
+      "owner": "6893eaba2ac0b16fa177be7b",
+      "pet": "65abc123def456791"
+    }
+  ]
+}
+```
+
+### Error Responses
+
+<Expandable title="500 Internal Server Error">
+```text
+Ha ocurrido un error en la petición, por favor ver detalle: [error]
+```
+</Expandable>
+
+---
+
+## Get Adoption by ID
+
+<CodeGroup>
+```bash cURL
+curl -X GET http://localhost:8080/api/adoptions/65def789abc123456
+```
+
+```javascript JavaScript
+const adoptionId = '65def789abc123456';
+fetch(`http://localhost:8080/api/adoptions/${adoptionId}`)
+  .then(res => res.json())
+  .then(data => console.log(data));
+```
+
+```python Python
+import requests
+
+adoption_id = '65def789abc123456'
+response = requests.get(f'http://localhost:8080/api/adoptions/{adoption_id}')
+print(response.json())
+```
+</CodeGroup>
+
+### Endpoint
+
+```
+GET /api/adoptions/:aid
+```
+
+Retrieves a single adoption record by its unique ID.
+
+### Path Parameters
+
+<ParamField path="aid" type="string" required>
+  The unique identifier (MongoDB ObjectId) of the adoption
+</ParamField>
+
+### Response
+
+<ResponseField name="status" type="string">
+  "success"
+</ResponseField>
+
+<ResponseField name="payload" type="object">
+  Adoption object with owner and pet references
+</ResponseField>
+
+### Example Response
+
+```json
+{
+  "status": "success",
+  "payload": {
+    "_id": "65def789abc123456",
+    "owner": "6893eaba2ac0b16fa177be7a",
+    "pet": "65abc123def456790"
+  }
+}
+```
+
+### Error Responses
+
+<Expandable title="404 Adoption Not Found">
+```json
+{
+  "status": "error",
+  "error": "Adoption not found"
+}
+```
+Returned when the adoption with the specified ID doesn't exist.
+</Expandable>
+
+<Expandable title="500 Internal Server Error">
+```text
+Ha ocurrido un error en la petición, por favor ver detalle: [error]
+```
+</Expandable>
+
+---
+
+## Create Adoption
+
+<CodeGroup>
+```bash cURL
+curl -X POST http://localhost:8080/api/adoptions/6893eaba2ac0b16fa177be7a/65abc123def456791
+```
+
+```javascript JavaScript
+const userId = '6893eaba2ac0b16fa177be7a';
+const petId = '65abc123def456791';
+
+fetch(`http://localhost:8080/api/adoptions/${userId}/${petId}`, {
+  method: 'POST'
+})
+.then(res => res.json())
+.then(data => console.log(data));
+```
+
+```python Python
+import requests
+
+user_id = '6893eaba2ac0b16fa177be7a'
+pet_id = '65abc123def456791'
+
+response = requests.post(
+    f'http://localhost:8080/api/adoptions/{user_id}/{pet_id}'
+)
+print(response.json())
+```
+</CodeGroup>
+
+### Endpoint
+
+```
+POST /api/adoptions/:uid/:pid
+```
+
+Creates a new adoption, linking a user to a pet. This endpoint performs several operations atomically:
+
+1. Validates that the user exists
+2. Validates that the pet exists
+3. Checks that the pet is not already adopted
+4. Adds the pet to the user's pets array
+5. Updates the pet's adopted status to true and sets the owner
+6. Creates an adoption record
+
+### Path Parameters
+
+<ParamField path="uid" type="string" required>
+  The unique identifier (MongoDB ObjectId) of the user adopting the pet
+</ParamField>
+
+<ParamField path="pid" type="string" required>
+  The unique identifier (MongoDB ObjectId) of the pet being adopted
+</ParamField>
+
+### Business Logic Flow
+
+The adoption process implements the following logic (from `src/controllers/adoptions.controller.js:23-38`):
+
+```javascript
+const {uid,pid} = req.params;
+const user = await usersService.getUserById(uid);
+if(!user) return res.status(404).send({status:"error", error:"user Not found"});
+
+const pet = await petsService.getBy({_id:pid});
+if(!pet) return res.status(404).send({status:"error",error:"Pet not found"});
+if(pet.adopted) return res.status(400).send({status:"error",error:"Pet is already adopted"});
+
+user.pets.push(pet._id);
+await usersService.update(user._id,{pets:user.pets})
+await petsService.update(pet._id,{adopted:true,owner:user._id})
+await adoptionsService.create({owner:user._id,pet:pet._id})
+
+res.send({status:"success",message:"Pet adopted"})
+```
+
+### Response
+
+<ResponseField name="status" type="string">
+  "success"
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  "Pet adopted"
+</ResponseField>
+
+### Example Response
+
+```json
+{
+  "status": "success",
+  "message": "Pet adopted"
+}
+```
+
+### Error Responses
+
+<Expandable title="404 User Not Found">
+```json
+{
+  "status": "error",
+  "error": "user Not found"
+}
+```
+Returned when the user with the specified ID doesn't exist.
+</Expandable>
+
+<Expandable title="404 Pet Not Found">
+```json
+{
+  "status": "error",
+  "error": "Pet not found"
+}
+```
+Returned when the pet with the specified ID doesn't exist.
+</Expandable>
+
+<Expandable title="400 Pet Already Adopted">
+```json
+{
+  "status": "error",
+  "error": "Pet is already adopted"
+}
+```
+Returned when trying to adopt a pet that has already been adopted by another user.
+</Expandable>
+
+<Expandable title="500 Internal Server Error">
+```text
+Ha ocurrido un error en la petición, por favor ver detalle: [error]
+```
+</Expandable>
+
+---
+
+## What Happens During an Adoption?
+
+When you create an adoption, the following database operations occur:
+
+### 1. User Update
+The pet's ObjectId is added to the user's `pets` array:
+
+```javascript
+// Before
+{
+  "_id": "6893eaba2ac0b16fa177be7a",
+  "first_name": "Jerónimo",
+  "pets": []
+}
+
+// After
+{
+  "_id": "6893eaba2ac0b16fa177be7a",
+  "first_name": "Jerónimo",
+  "pets": [
+    { "_id": "65abc123def456791" }
+  ]
+}
+```
+
+### 2. Pet Update
+The pet is marked as adopted and the owner is set:
+
+```javascript
+// Before
+{
+  "_id": "65abc123def456791",
+  "name": "Buddy",
+  "adopted": false,
+  "owner": null
+}
+
+// After
+{
+  "_id": "65abc123def456791",
+  "name": "Buddy",
+  "adopted": true,
+  "owner": "6893eaba2ac0b16fa177be7a"
+}
+```
+
+### 3. Adoption Record Creation
+A new adoption document is created:
+
+```javascript
+{
+  "_id": "65def789abc123458",
+  "owner": "6893eaba2ac0b16fa177be7a",
+  "pet": "65abc123def456791"
+}
+```
+
+<Note>
+  All three operations must succeed for the adoption to be complete. If any operation fails, an error is returned and the transaction should be rolled back (though the current implementation doesn't use MongoDB transactions).
+</Note>
+
+---
+
+## Complete Adoption Example
+
+### Step 1: Check Available Pets
+
+```bash
+curl -X GET http://localhost:8080/api/pets
+```
+
+### Step 2: Check User Profile
+
+```bash
+curl -X GET http://localhost:8080/api/users/6893eaba2ac0b16fa177be7a
+```
+
+### Step 3: Create Adoption
+
+```bash
+curl -X POST http://localhost:8080/api/adoptions/6893eaba2ac0b16fa177be7a/65abc123def456791
+```
+
+Response:
+```json
+{
+  "status": "success",
+  "message": "Pet adopted"
+}
+```
+
+### Step 4: Verify Adoption
+
+```bash
+# Check user now has the pet
+curl -X GET http://localhost:8080/api/users/6893eaba2ac0b16fa177be7a
+
+# Check pet is now adopted
+curl -X GET http://localhost:8080/api/pets
+
+# Check adoption record
+curl -X GET http://localhost:8080/api/adoptions
+```
+
+---
+
+## Implementation Details
+
+### Controller Source
+
+The Adoptions controller (`src/controllers/adoptions.controller.js`) implements:
+
+<Expandable title="createAdoption - Lines 23-39">
+```javascript
+const createAdoption = async(req,res)=>{
+    try {
+        const {uid,pid} = req.params;
+        const user = await usersService.getUserById(uid);
+        if(!user) return res.status(404).send({status:"error", error:"user Not found"});
+        const pet = await petsService.getBy({_id:pid});
+        if(!pet) return res.status(404).send({status:"error",error:"Pet not found"});
+        if(pet.adopted) return res.status(400).send({status:"error",error:"Pet is already adopted"});
+        user.pets.push(pet._id);
+        await usersService.update(user._id,{pets:user.pets})
+        await petsService.update(pet._id,{adopted:true,owner:user._id})
+        await adoptionsService.create({owner:user._id,pet:pet._id})
+        res.send({status:"success",message:"Pet adopted"})        
+    } catch (error) {
+        res.status(500).send("Ha ocurrido un error en la petición, por favor ver detalle: ",error)    
+    }
+}
+```
+</Expandable>
+
+### Router Configuration
+
+Routes are defined in `src/routes/adoption.router.js`:
+
+```javascript
+router.get('/', adoptionsController.getAllAdoptions);
+router.get('/:aid', adoptionsController.getAdoption);
+router.post('/:uid/:pid', adoptionsController.createAdoption);
+```
+
+### Model Definition
+
+The Adoption model (`src/dao/models/Adoption.js`) is simple:
+
+```javascript
+const schema = new mongoose.Schema({
+    owner:{
+        type:mongoose.SchemaTypes.ObjectId,
+        ref:'Users'
+    },
+    pet:{
+        type:mongoose.SchemaTypes.ObjectId,
+        ref:'Pets'
+    }
+})
+```
+
+---
+
+## Considerations
+
+<Warning>
+  **No DELETE endpoint:** The current implementation doesn't provide a way to reverse an adoption (un-adopt a pet). If this functionality is needed, you would need to:
+  1. Remove the pet from the user's pets array
+  2. Set the pet's adopted status to false and clear the owner
+  3. Delete the adoption record
+</Warning>
+
+<Warning>
+  **No transactions:** The adoption process performs multiple database operations sequentially without using MongoDB transactions. If one operation fails after others succeed, you may end up with inconsistent data. Consider implementing transactions for production use.
+</Warning>
+
+<Note>
+  **One pet, one owner:** A pet can only be adopted by one user at a time. The check `if(pet.adopted)` prevents a pet from being adopted twice.
+</Note>
+
+---
+
+## Related Endpoints
+
+<CardGroup cols={2}>
+  <Card title="Users API" icon="users" href="/api/users">
+    View user profiles and their adopted pets
+  </Card>
+  <Card title="Pets API" icon="paw" href="/api/pets">
+    Browse available pets for adoption
+  </Card>
+</CardGroup>

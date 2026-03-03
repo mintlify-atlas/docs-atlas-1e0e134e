@@ -1,0 +1,246 @@
+---
+title: 'Railway Deployment'
+description: 'Deploy the Adoptme API on Railway platform'
+---
+
+## Overview
+
+The Adoptme API is deployed on Railway, a modern platform-as-a-service that simplifies deployment and hosting. This guide covers deploying the application to Railway with proper configuration.
+
+## Live Deployment
+
+<Note>
+**Production URL**: [https://coderhouse-backendiii-production.up.railway.app](https://coderhouse-backendiii-production.up.railway.app)
+
+**Swagger Documentation**: [https://coderhouse-backendiii-production.up.railway.app/docs](https://coderhouse-backendiii-production.up.railway.app/docs)
+</Note>
+
+## Prerequisites
+
+- Railway account ([railway.app](https://railway.app))
+- GitHub repository with your code
+- MongoDB database (Railway MongoDB addon or external service like MongoDB Atlas)
+- Railway CLI (optional, for command-line deployment)
+
+## Deployment Steps
+
+<Steps>
+  <Step title="Create New Project">
+    1. Log in to [Railway](https://railway.app)
+    2. Click "New Project"
+    3. Select "Deploy from GitHub repo"
+    4. Authorize Railway to access your GitHub account
+    5. Select the repository containing the Adoptme API
+  </Step>
+
+  <Step title="Configure Build Settings">
+    Railway automatically detects Node.js projects and configures:
+
+    - **Build Command**: `npm install`
+    - **Start Command**: `npm start`
+    - **Node Version**: Detected from Dockerfile (20.11.0)
+
+    These settings match the Dockerfile configuration and typically require no changes.
+  </Step>
+
+  <Step title="Set Environment Variables">
+    In the Railway dashboard, navigate to your project and add the following environment variables:
+
+    ```bash
+    PORT=3000
+    MONGO_URL=your_mongodb_connection_string
+    DB_NAME=adoptme
+    ```
+
+    <Warning>
+    The application will fail to start without `MONGO_URL` and `DB_NAME` as it connects to MongoDB during initialization.
+    </Warning>
+  </Step>
+
+  <Step title="Configure MongoDB">
+    **Option 1: Railway MongoDB Plugin**
+
+    1. In your Railway project, click "New"
+    2. Select "Database" → "MongoDB"
+    3. Railway will provision a MongoDB instance
+    4. Use the provided `MONGO_URL` connection string
+
+    **Option 2: External MongoDB (MongoDB Atlas)**
+
+    1. Create a MongoDB Atlas cluster
+    2. Get your connection string
+    3. Add it to Railway as `MONGO_URL`
+    4. Ensure your Atlas cluster allows connections from Railway IPs (0.0.0.0/0 for simplicity, or specific Railway IPs)
+  </Step>
+
+  <Step title="Deploy">
+    Railway automatically deploys when you push to your connected GitHub branch:
+
+    ```bash
+    git add .
+    git commit -m "Deploy to Railway"
+    git push origin main
+    ```
+
+    Monitor the deployment in the Railway dashboard under the "Deployments" tab.
+  </Step>
+
+  <Step title="Configure Custom Domain (Optional)">
+    1. In Railway project settings, go to "Settings" → "Domains"
+    2. Add a custom domain or use the provided `.railway.app` subdomain
+    3. Configure DNS records as instructed by Railway
+  </Step>
+</Steps>
+
+## Environment Configuration
+
+### Required Environment Variables
+
+| Variable | Description | Example | Required |
+|----------|-------------|---------|----------|
+| `PORT` | Application port | `3000` | Yes |
+| `MONGO_URL` | MongoDB connection URL | `mongodb+srv://user:pass@cluster.mongodb.net` | Yes |
+| `DB_NAME` | Database name | `adoptme` | Yes |
+
+### Setting Variables in Railway
+
+<CodeGroup>
+```bash Railway CLI
+railway variables set PORT=3000
+railway variables set MONGO_URL="mongodb+srv://..."
+railway variables set DB_NAME=adoptme
+```
+
+```json Railway Dashboard
+{
+  "PORT": "3000",
+  "MONGO_URL": "mongodb+srv://user:pass@cluster.mongodb.net",
+  "DB_NAME": "adoptme"
+}
+```
+</CodeGroup>
+
+<Info>
+Environment variables set in Railway are automatically injected into your application at runtime. No need to commit `.env` files.
+</Info>
+
+## MongoDB Connection in Production
+
+### Connection String Format
+
+Railway requires a full MongoDB connection string:
+
+```bash
+# MongoDB Atlas
+MONGO_URL=mongodb+srv://username:password@cluster.mongodb.net/?retryWrites=true&w=majority
+
+# Railway MongoDB Plugin
+MONGO_URL=mongodb://mongo:password@containers-us-west-123.railway.app:6789
+
+# Self-hosted MongoDB
+MONGO_URL=mongodb://user:pass@your-mongo-host:27017/adoptme?authSource=admin
+```
+
+### Security Considerations
+
+- Use strong passwords for MongoDB users
+- Restrict MongoDB network access to Railway IPs when possible
+- Enable MongoDB authentication
+- Use connection string parameters like `retryWrites=true` for reliability
+
+<Warning>
+Never commit `.env` files or expose connection strings in your code. Always use environment variables.
+</Warning>
+
+## Health Checks and Monitoring
+
+### Health Check Endpoint
+
+Railway automatically monitors your application. Configure a health check endpoint in your Railway project settings:
+
+- **Path**: `/api/health` (if available)
+- **Port**: `3000`
+- **Interval**: 30 seconds
+
+### Monitoring Deployment
+
+1. **Logs**: View real-time logs in Railway dashboard under "Logs" tab
+2. **Metrics**: Monitor CPU, memory, and network usage in "Metrics" tab
+3. **Deployments**: Track deployment history and rollback if needed
+
+### Testing the Production Deployment
+
+<CodeGroup>
+```bash Test API
+curl https://coderhouse-backendiii-production.up.railway.app/api/pets
+```
+
+```bash Check Swagger Docs
+curl https://coderhouse-backendiii-production.up.railway.app/docs
+```
+
+```bash Health Check
+curl https://coderhouse-backendiii-production.up.railway.app/api/health
+```
+</CodeGroup>
+
+## Continuous Deployment
+
+Railway automatically deploys on every push to your configured branch:
+
+1. **Push to GitHub**: 
+   ```bash
+   git push origin main
+   ```
+
+2. **Railway detects changes**: Automatically triggers a new deployment
+
+3. **Build process**: Runs `npm install` and builds your application
+
+4. **Deploy**: Replaces the old deployment with the new one (zero-downtime)
+
+5. **Health check**: Ensures the new deployment is healthy before routing traffic
+
+## Troubleshooting
+
+### Deployment Fails
+
+1. Check build logs in Railway dashboard
+2. Verify all environment variables are set correctly
+3. Ensure `package.json` has correct `start` script
+4. Check for syntax errors or missing dependencies
+
+### Application Crashes on Startup
+
+- Verify `MONGO_URL` and `DB_NAME` are set
+- Check MongoDB is accessible from Railway
+- Review application logs for connection errors
+- Ensure Node.js version compatibility
+
+### Cannot Connect to MongoDB
+
+- Verify MongoDB allows connections from Railway (check IP whitelist)
+- Test connection string format (include authentication database)
+- Check MongoDB user permissions
+- Ensure database exists or app can create it
+
+### 502 Bad Gateway
+
+- Application may still be starting (wait 30-60 seconds)
+- Check if application is listening on correct PORT
+- Verify application binds to `0.0.0.0` not `localhost`
+- Review logs for startup errors
+
+<Info>
+For more advanced Railway features, explore their documentation at [docs.railway.app](https://docs.railway.app)
+</Info>
+
+## Rollback and Recovery
+
+If a deployment fails or causes issues:
+
+1. Go to "Deployments" tab in Railway dashboard
+2. Find the last working deployment
+3. Click "Redeploy" to rollback
+4. Fix the issue in your code
+5. Push a new commit to deploy again

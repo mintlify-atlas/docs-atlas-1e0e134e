@@ -1,0 +1,648 @@
+---
+title: 'Authentication & Security'
+description: 'JWT-based authentication system with bcrypt password hashing and cookie sessions'
+---
+
+## Overview
+
+Adoptme implements a secure **JWT (JSON Web Token)** based authentication system with the following features:
+
+- Password hashing with **bcrypt** (10 salt rounds)
+- Token-based authentication using **jsonwebtoken**
+- Cookie-based session management with **cookie-parser**
+- User registration and login flows
+- Protected routes requiring authentication
+- DTO-based data sanitization
+
+All authentication logic is handled in `src/controllers/sessions.controller.js` and exposed via `/api/sessions` routes.
+
+## Registration Flow
+
+The registration endpoint creates new user accounts with secure password storage.
+
+### Endpoint
+
+```
+POST /api/sessions/register
+```
+
+### Implementation
+
+From `src/controllers/sessions.controller.js`:
+
+```javascript
+import { usersService } from "../services/index.js";
+import { createHash, passwordValidation } from "../utils/index.js";
+import jwt from 'jsonwebtoken';
+import UserDTO from '../dto/User.dto.js';
+
+const register = async (req, res) => {
+  try {
+    const { first_name, last_name, email, password } = req.body;
+    
+    // 1. Validate required fields
+    if (!first_name || !last_name || !email || !password) {
+      return res.status(400).send({ 
+        status: "error", 
+        error: "Incomplete values" 
+      });
+    }
+    
+    // 2. Check if user already exists
+    const exists = await usersService.getUserByEmail(email);
+    if (exists) {
+      return res.status(400).send({ 
+        status: "error", 
+        error: "User already exists" 
+      });
+    }
+    
+    // 3. Hash password with bcrypt
+    const hashedPassword = await createHash(password);
+    
+    // 4. Create user with hashed password
+    const user = {
+      first_name,
+      last_name,
+      email,
+      password: hashedPassword
+    }
+    
+    let result = await usersService.create(user);
+    res.send({ status: "success", payload: result._id });
+  } catch (error) {
+    res.status(500).send("Ha ocurrido un error en la petición")
+  }
+}
+```
+
+### Registration Steps
+
+<Accordion title="Step-by-Step Breakdown">
+
+#### 1. Validate Input
+
+Ensures all required fields are provided:
+```javascript
+if (!first_name || !last_name || !email || !password) {
+  return res.status(400).send({ status: "error", error: "Incomplete values" });
+}
+```
+
+#### 2. Check for Existing User
+
+Prevents duplicate registrations:
+```javascript
+const exists = await usersService.getUserByEmail(email);
+if (exists) {
+  return res.status(400).send({ status: "error", error: "User already exists" });
+}
+```
+
+<Note>
+The email field has a **unique index** in the User model schema, providing database-level duplicate prevention.
+</Note>
+
+#### 3. Hash Password
+
+Uses bcrypt with 10 salt rounds from `src/utils/index.js`:
+
+```javascript
+import bcrypt from 'bcrypt';
+
+export const createHash = async(password) => {
+  const salts = await bcrypt.genSalt(10);
+  return bcrypt.hash(password, salts);
+}
+```
+
+**Security features:**
+- Async hashing (non-blocking)
+- 10 salt rounds (recommended minimum)
+- Unique salt per password
+- One-way hashing (cannot be reversed)
+
+#### 4. Store User
+
+Saves user with hashed password to MongoDB:
+```javascript
+const user = {
+  first_name,
+  last_name,
+  email,
+  password: hashedPassword  // Hashed, never plain text
+}
+let result = await usersService.create(user);
+```
+
+</Accordion>
+
+### Request Example
+
+```bash
+curl -X POST http://localhost:8080/api/sessions/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "first_name": "John",
+    "last_name": "Doe",
+    "email": "john@example.com",
+    "password": "securePassword123"
+  }'
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "payload": "507f1f77bcf86cd799439011"
+}
+```
+
+---
+
+## Login Flow
+
+The login endpoint authenticates users and issues JWT tokens stored in cookies.
+
+### Endpoint
+
+```
+POST /api/sessions/login
+```
+
+### Implementation
+
+From `src/controllers/sessions.controller.js`:
+
+```javascript
+const login = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    
+    // 1. Validate input
+    if (!email || !password) {
+      return res.status(400).send({ 
+        status: "error", 
+        error: "Incomplete values" 
+      });
+    }
+    
+    // 2. Find user by email
+    const user = await usersService.getUserByEmail(email);
+    if (!user) {
+      return res.status(404).send({
+        status: "error",
+        error: "User doesn't exist"
+      });
+    }
+    
+    // 3. Validate password
+    const isValidPassword = await passwordValidation(user, password);
+    if (!isValidPassword) {
+      return res.status(400).send({
+        status: "error",
+        error: "Incorrect password"
+      });
+    }
+    
+    // 4. Create sanitized DTO (removes password)
+    const userDto = UserDTO.getUserTokenFrom(user);
+    
+    // 5. Generate JWT token
+    const token = jwt.sign(userDto, 'tokenSecretJWT', {expiresIn: "1h"});
+    
+    // 6. Set cookie and respond
+    res.cookie('coderCookie', token, {maxAge: 3600000})
+       .send({status: "success", message: "Logged in"})
+  } catch (error) {
+    res.status(500).send("Ha ocurrido un error en la petición")
+  }
+}
+```
+
+### Login Steps
+
+<Accordion title="Step-by-Step Breakdown">
+
+#### 1. Validate Input
+
+```javascript
+if (!email || !password) {
+  return res.status(400).send({ status: "error", error: "Incomplete values" });
+}
+```
+
+#### 2. Find User
+
+Query database for user by email:
+```javascript
+const user = await usersService.getUserByEmail(email);
+if (!user) {
+  return res.status(404).send({status: "error", error: "User doesn't exist"});
+}
+```
+
+#### 3. Verify Password
+
+Compare provided password with stored hash using bcrypt from `src/utils/index.js`:
+
+```javascript
+export const passwordValidation = async(user, password) => {
+  return bcrypt.compare(password, user.password);
+}
+```
+
+**How it works:**
+- `bcrypt.compare()` hashes the input password with the stored salt
+- Compares the result with the stored hash
+- Returns `true` if they match, `false` otherwise
+- Timing-safe comparison prevents timing attacks
+
+#### 4. Create User DTO
+
+Sanitize user data before encoding in JWT:
+
+```javascript
+import UserDTO from '../dto/User.dto.js';
+
+const userDto = UserDTO.getUserTokenFrom(user);
+// Returns: { name: "John Doe", role: "user", email: "john@example.com" }
+```
+
+<Warning>
+The DTO **removes the password field** from the JWT payload. Never include sensitive data in JWTs as they can be decoded by anyone.
+</Warning>
+
+#### 5. Generate JWT Token
+
+Create a signed token with 1-hour expiration:
+
+```javascript
+const token = jwt.sign(userDto, 'tokenSecretJWT', {expiresIn: "1h"});
+```
+
+**JWT payload contains:**
+- `name`: User's full name
+- `role`: User role (default: "user")
+- `email`: User's email
+- `iat`: Issued at timestamp
+- `exp`: Expiration timestamp (1 hour from issue)
+
+#### 6. Set Cookie
+
+Store token in HTTP cookie:
+
+```javascript
+res.cookie('coderCookie', token, {maxAge: 3600000})
+```
+
+**Cookie settings:**
+- **Name**: `coderCookie`
+- **Max Age**: 3600000ms (1 hour)
+- **HttpOnly**: Not set (should be enabled for production)
+- **Secure**: Not set (should be enabled for HTTPS)
+- **SameSite**: Not set (should be set for CSRF protection)
+
+</Accordion>
+
+### Request Example
+
+```bash
+curl -X POST http://localhost:8080/api/sessions/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "john@example.com",
+    "password": "securePassword123"
+  }'
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "message": "Logged in"
+}
+```
+
+**Response headers include:**
+```
+Set-Cookie: coderCookie=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...; Max-Age=3600000; Path=/
+```
+
+---
+
+## Current User (Protected Route)
+
+Verifies and returns the authenticated user's information from the JWT cookie.
+
+### Endpoint
+
+```
+GET /api/sessions/current
+```
+
+### Implementation
+
+From `src/controllers/sessions.controller.js`:
+
+```javascript
+const current = async(req, res) => {
+  try {
+    // 1. Extract cookie
+    const cookie = req.cookies['coderCookie']
+    
+    // 2. Verify and decode JWT
+    const user = jwt.verify(cookie, 'tokenSecretJWT');
+    
+    if (user) {
+      return res.send({status: "success", payload: user})
+    }
+  } catch (error) {
+    res.status(500).send("Ha ocurrido un error en la petición")
+  }
+}
+```
+
+### How It Works
+
+<Accordion title="Token Verification Process">
+
+#### 1. Extract Cookie
+
+```javascript
+const cookie = req.cookies['coderCookie']
+```
+
+Cookie-parser middleware makes cookies available on `req.cookies`.
+
+#### 2. Verify Token
+
+```javascript
+const user = jwt.verify(cookie, 'tokenSecretJWT');
+```
+
+**Verification checks:**
+- Token signature is valid (signed with correct secret)
+- Token has not expired
+- Token structure is valid
+
+**Throws error if:**
+- Token is missing
+- Signature is invalid (tampered token)
+- Token has expired
+- Token is malformed
+
+#### 3. Return User Data
+
+If valid, returns the decoded JWT payload:
+
+```json
+{
+  "status": "success",
+  "payload": {
+    "name": "John Doe",
+    "role": "user",
+    "email": "john@example.com",
+    "iat": 1678901234,
+    "exp": 1678904834
+  }
+}
+```
+
+</Accordion>
+
+### Request Example
+
+```bash
+curl -X GET http://localhost:8080/api/sessions/current \
+  -H "Cookie: coderCookie=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+```
+
+---
+
+## Unprotected Login (Alternative)
+
+An alternative login endpoint that stores the **entire user object** (including password hash) in the JWT.
+
+<Warning>
+This is a **security anti-pattern** and should not be used in production. It's included for educational purposes.
+</Warning>
+
+### Endpoint
+
+```
+GET /api/sessions/unprotectedLogin
+```
+
+### Differences from Protected Login
+
+| Feature | Protected Login | Unprotected Login |
+|---------|----------------|-------------------|
+| JWT Payload | Sanitized DTO (no password) | Full user object |
+| Cookie Name | `coderCookie` | `unprotectedCookie` |
+| Security | High | **Low - exposes password hash** |
+| Production Ready | Yes | **No** |
+
+### Implementation
+
+```javascript
+const unprotectedLogin = async(req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).send({ status: "error", error: "Incomplete values" });
+    }
+    
+    const user = await usersService.getUserByEmail(email);
+    if (!user) {
+      return res.status(404).send({status: "error", error: "User doesn't exist"});
+    }
+    
+    const isValidPassword = await passwordValidation(user, password);
+    if (!isValidPassword) {
+      return res.status(400).send({status: "error", error: "Incorrect password"});
+    }
+    
+    // SECURITY ISSUE: Encodes entire user object including password hash
+    const token = jwt.sign(user, 'tokenSecretJWT', {expiresIn: "1h"});
+    
+    res.cookie('unprotectedCookie', token, {maxAge: 3600000})
+       .send({status: "success", message: "Unprotected Logged in"})
+  } catch (error) {
+    res.status(500).send("Ha ocurrido un error en la petición")
+  }
+}
+```
+
+<Warning>
+**Why this is dangerous:**
+- JWTs can be decoded by anyone (they're not encrypted, just signed)
+- Exposes password hash to client-side JavaScript
+- Increases JWT size unnecessarily
+- Violates principle of least privilege
+
+**Always use DTOs to sanitize data before encoding in JWTs.**
+</Warning>
+
+---
+
+## Authentication Routes
+
+All authentication endpoints are defined in `src/routes/sessions.router.js`:
+
+```javascript
+import { Router } from 'express';
+import sessionsController from '../controllers/sessions.controller.js';
+
+const router = Router();
+
+router.post('/register', sessionsController.register);
+router.post('/login', sessionsController.login);
+router.get('/current', sessionsController.current);
+router.get('/unprotectedLogin', sessionsController.unprotectedLogin);
+router.get('/unprotectedCurrent', sessionsController.unprotectedCurrent);
+
+export default router;
+```
+
+### Available Routes
+
+| Method | Path | Description | Protected |
+|--------|------|-------------|----------|
+| POST | `/api/sessions/register` | Create new user account | No |
+| POST | `/api/sessions/login` | Authenticate and get token | No |
+| GET | `/api/sessions/current` | Get current user info | Yes |
+| GET | `/api/sessions/unprotectedLogin` | Insecure login (demo only) | No |
+| GET | `/api/sessions/unprotectedCurrent` | Get unprotected user info | Yes |
+
+---
+
+## Security Best Practices
+
+<Accordion title="Production Security Checklist">
+
+### 1. Environment Variables
+
+<Warning>
+Never hardcode secrets in source code. The current implementation uses `'tokenSecretJWT'` as a hardcoded secret.
+</Warning>
+
+**Recommended approach:**
+
+```javascript
+import config from './config/config.js';
+
+const token = jwt.sign(userDto, config.JWT_SECRET, {expiresIn: "1h"});
+```
+
+Store secrets in `.env`:
+```bash
+JWT_SECRET=your_very_long_random_secret_string_here
+```
+
+### 2. Cookie Security Flags
+
+Update cookie settings for production:
+
+```javascript
+res.cookie('coderCookie', token, {
+  maxAge: 3600000,
+  httpOnly: true,      // Prevents JavaScript access
+  secure: true,        // HTTPS only
+  sameSite: 'strict'   // CSRF protection
+})
+```
+
+### 3. Password Requirements
+
+Implement password strength validation:
+- Minimum 8 characters
+- Mix of uppercase, lowercase, numbers
+- Special characters
+- Not in common password lists
+
+### 4. Rate Limiting
+
+Prevent brute force attacks:
+```javascript
+import rateLimit from 'express-rate-limit';
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5 // 5 requests per window
+});
+
+router.post('/login', loginLimiter, sessionsController.login);
+```
+
+### 5. HTTPS Only
+
+Enforce HTTPS in production:
+- Use reverse proxy (nginx, Apache)
+- Obtain SSL certificate (Let's Encrypt)
+- Set `secure: true` on cookies
+
+### 6. Token Refresh
+
+Implement refresh tokens for better security:
+- Short-lived access tokens (15 minutes)
+- Long-lived refresh tokens (7 days)
+- Store refresh tokens in database
+- Rotate refresh tokens on use
+
+</Accordion>
+
+## JWT Token Structure
+
+### Header
+```json
+{
+  "alg": "HS256",
+  "typ": "JWT"
+}
+```
+
+### Payload (Protected Login)
+```json
+{
+  "name": "John Doe",
+  "role": "user",
+  "email": "john@example.com",
+  "iat": 1678901234,
+  "exp": 1678904834
+}
+```
+
+### Signature
+```
+HMACSHA256(
+  base64UrlEncode(header) + "." + base64UrlEncode(payload),
+  "tokenSecretJWT"
+)
+```
+
+<Note>
+JWTs are **not encrypted**, only **signed**. Anyone can decode and read the payload. Never include sensitive data like passwords or credit card numbers.
+</Note>
+
+## Error Handling
+
+Common authentication errors:
+
+| Error | Status | Reason |
+|-------|--------|--------|
+| "Incomplete values" | 400 | Missing required fields |
+| "User already exists" | 400 | Email already registered |
+| "User doesn't exist" | 404 | Invalid email |
+| "Incorrect password" | 400 | Password verification failed |
+| JWT verification error | 500 | Invalid/expired token |
+
+## Next Steps
+
+- Learn about [Data Models](/concepts/data-models) and user schema
+- Explore the [Architecture](/concepts/architecture) patterns
+- See [API Reference](/api/sessions) for full endpoint documentation
+- Implement middleware for route protection
+- Add role-based authorization

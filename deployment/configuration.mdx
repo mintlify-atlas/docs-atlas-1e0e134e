@@ -1,0 +1,368 @@
+---
+title: 'Configuration Reference'
+description: 'Environment variables and configuration for the Adoptme API'
+---
+
+## Overview
+
+The Adoptme API uses environment variables for configuration, loaded via the `dotenv` package. This approach keeps sensitive data secure and allows different configurations for development, staging, and production environments.
+
+## Configuration Loading
+
+The application loads configuration from `src/config/config.js`:
+
+```javascript
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+export default  {
+    PORT: process.env.PORT || 8080,
+    MONGO_URL: process.env.MONGO_URL || 'mongodb://127.0.0.1:27017',
+    DB_NAME: process.env.DB_NAME || 'adoptme'
+}
+```
+
+### How It Works
+
+1. **dotenv.config()**: Loads variables from `.env` file into `process.env`
+2. **Default values**: Provides fallbacks if environment variables aren't set
+3. **Export**: Makes configuration available throughout the application
+
+<Info>
+Default values are only used in development. Production deployments should always explicitly set environment variables.
+</Info>
+
+## Environment Variables Reference
+
+### Core Configuration
+
+| Variable | Description | Type | Default | Required |
+|----------|-------------|------|---------|----------|
+| `PORT` | Port number for the HTTP server | Number | `8080` | No |
+| `MONGO_URL` | MongoDB connection URL | String | `mongodb://127.0.0.1:27017` | Yes (production) |
+| `DB_NAME` | MongoDB database name | String | `adoptme` | Yes (production) |
+
+### PORT Configuration
+
+**Description**: The port on which the Express server listens for HTTP requests.
+
+**Examples**:
+```bash
+# Development
+PORT=3000
+
+# Production (Railway)
+PORT=3000
+
+# Docker container
+PORT=3000
+```
+
+**Notes**:
+- Dockerfile exposes port 3000
+- Railway typically uses port 3000
+- Development default is 8080
+- Can be any available port (1024-65535 for non-root users)
+
+<Warning>
+When running in Docker, ensure the `PORT` environment variable matches the exposed port in the Dockerfile (3000).
+</Warning>
+
+### MONGO_URL Configuration
+
+**Description**: Full connection string to your MongoDB instance, including protocol, credentials, host, and port.
+
+**Format**:
+```bash
+mongodb://[username:password@]host[:port][/database][?options]
+```
+
+**Examples**:
+
+<CodeGroup>
+```bash Local Development
+MONGO_URL=mongodb://127.0.0.1:27017
+```
+
+```bash MongoDB Atlas
+MONGO_URL=mongodb+srv://username:password@cluster.mongodb.net/?retryWrites=true&w=majority
+```
+
+```bash Railway MongoDB
+MONGO_URL=mongodb://mongo:password@containers-us-west-123.railway.app:6789
+```
+
+```bash Docker Compose
+MONGO_URL=mongodb://mongo:27017
+```
+
+```bash Authenticated Local
+MONGO_URL=mongodb://admin:password@localhost:27017/adoptme?authSource=admin
+```
+</CodeGroup>
+
+**Connection String Parameters**:
+
+| Parameter | Description | Example |
+|-----------|-------------|----------|
+| `authSource` | Authentication database | `authSource=admin` |
+| `retryWrites` | Retry write operations | `retryWrites=true` |
+| `w` | Write concern | `w=majority` |
+| `ssl` | Use SSL/TLS | `ssl=true` |
+| `replicaSet` | Replica set name | `replicaSet=myRS` |
+
+<Warning>
+The application connects to MongoDB during initialization. If `MONGO_URL` is invalid or MongoDB is unreachable, the application will fail to start.
+</Warning>
+
+### DB_NAME Configuration
+
+**Description**: Name of the MongoDB database to use for storing pets, users, and adoption data.
+
+**Examples**:
+```bash
+# Production
+DB_NAME=adoptme
+
+# Development
+DB_NAME=adoptme_dev
+
+# Testing
+DB_NAME=adoptme_test
+
+# Staging
+DB_NAME=adoptme_staging
+```
+
+**Notes**:
+- Database is created automatically if it doesn't exist (with proper MongoDB permissions)
+- Use different database names for different environments
+- Default is `adoptme` in all environments
+
+## Environment-Specific Configuration
+
+### Development Environment
+
+Create a `.env` file in the project root:
+
+```bash
+PORT=3000
+MONGO_URL=mongodb://127.0.0.1:27017
+DB_NAME=adoptme_dev
+```
+
+**Development Setup**:
+<Steps>
+  <Step title="Create .env file">
+    ```bash
+    touch .env
+    ```
+  </Step>
+
+  <Step title="Add configuration">
+    ```bash
+    PORT=3000
+    MONGO_URL=mongodb://127.0.0.1:27017
+    DB_NAME=adoptme_dev
+    ```
+  </Step>
+
+  <Step title="Start MongoDB locally">
+    ```bash
+    # Using Docker
+    docker run -d -p 27017:27017 --name mongodb mongo:latest
+
+    # Or using installed MongoDB
+    mongod
+    ```
+  </Step>
+
+  <Step title="Start the application">
+    ```bash
+    npm start
+    ```
+  </Step>
+</Steps>
+
+<Note>
+The `.env` file is excluded from version control via `.gitignore`. Never commit sensitive credentials.
+</Note>
+
+### Production Environment (Railway)
+
+Set environment variables in the Railway dashboard:
+
+```bash
+PORT=3000
+MONGO_URL=mongodb+srv://user:pass@cluster.mongodb.net/?retryWrites=true&w=majority
+DB_NAME=adoptme
+```
+
+**Production Requirements**:
+- Always use explicit environment variables (no defaults)
+- Use MongoDB Atlas or managed MongoDB service
+- Enable authentication on MongoDB
+- Use strong, randomly generated passwords
+- Enable SSL/TLS for MongoDB connections
+
+### Docker Environment
+
+Pass environment variables when running the container:
+
+```bash
+docker run -d \
+  --name adoptme-api \
+  -p 8080:3000 \
+  -e PORT=3000 \
+  -e MONGO_URL=mongodb://host.docker.internal:27017 \
+  -e DB_NAME=adoptme \
+  fabil2025/serverentregafinal:1.0.0
+```
+
+Or use Docker Compose with an `.env` file:
+
+```yaml
+version: '3.8'
+services:
+  api:
+    image: fabil2025/serverentregafinal:1.0.0
+    ports:
+      - "8080:3000"
+    environment:
+      - PORT=3000
+      - MONGO_URL=${MONGO_URL}
+      - DB_NAME=${DB_NAME}
+```
+
+<Info>
+When using Docker on the same host as MongoDB, use `host.docker.internal` instead of `localhost` to access the host machine.
+</Info>
+
+## Security Considerations
+
+### Protecting Sensitive Data
+
+<Warning>
+**Never commit the following to version control:**
+- `.env` files
+- MongoDB connection strings with credentials
+- API keys or secrets
+- Production configuration
+</Warning>
+
+### Best Practices
+
+1. **Use Environment Variables**: Never hardcode credentials in source code
+
+2. **Strong Passwords**: Use complex, randomly generated passwords for MongoDB
+   ```bash
+   # Generate a secure password
+   openssl rand -base64 32
+   ```
+
+3. **Rotate Credentials**: Regularly update MongoDB passwords and connection strings
+
+4. **Limit Access**: Configure MongoDB to only accept connections from known IPs
+
+5. **Enable Authentication**: Always require authentication in production MongoDB
+
+6. **Use SSL/TLS**: Encrypt connections to MongoDB
+   ```bash
+   MONGO_URL=mongodb+srv://...?ssl=true
+   ```
+
+7. **Principle of Least Privilege**: Create MongoDB users with minimal required permissions
+
+### MongoDB User Permissions
+
+Create a dedicated user for the application:
+
+```javascript
+// In MongoDB shell
+use adoptme
+db.createUser({
+  user: "adoptme_app",
+  pwd: "secure_random_password",
+  roles: [
+    { role: "readWrite", db: "adoptme" }
+  ]
+})
+```
+
+## Configuration Validation
+
+### Required Variables Check
+
+The application should validate required configuration on startup. Add to `src/config/config.js`:
+
+```javascript
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+const config = {
+    PORT: process.env.PORT || 8080,
+    MONGO_URL: process.env.MONGO_URL || 'mongodb://127.0.0.1:27017',
+    DB_NAME: process.env.DB_NAME || 'adoptme'
+}
+
+// Validation for production
+if (process.env.NODE_ENV === 'production') {
+    if (!process.env.MONGO_URL) {
+        throw new Error('MONGO_URL is required in production');
+    }
+    if (!process.env.DB_NAME) {
+        throw new Error('DB_NAME is required in production');
+    }
+}
+
+export default config;
+```
+
+## Troubleshooting
+
+### Application Won't Start
+
+**Problem**: Application crashes immediately after starting
+
+**Solutions**:
+1. Verify all required environment variables are set
+2. Check MongoDB connection string format
+3. Ensure MongoDB is running and accessible
+4. Review application logs for specific error messages
+
+### Cannot Connect to MongoDB
+
+**Problem**: "Failed to connect to MongoDB" error
+
+**Solutions**:
+1. Verify `MONGO_URL` is correct and accessible
+2. Check network connectivity to MongoDB host
+3. Ensure MongoDB authentication credentials are valid
+4. Check firewall rules and security groups
+5. Verify MongoDB is running: `mongosh "$MONGO_URL"`
+
+### Wrong Database Used
+
+**Problem**: Application connects but uses wrong database
+
+**Solutions**:
+1. Verify `DB_NAME` environment variable is set
+2. Check if database name is included in connection string
+3. Ensure no conflicting configuration in application code
+
+### Environment Variables Not Loading
+
+**Problem**: Application uses default values instead of `.env` file
+
+**Solutions**:
+1. Verify `.env` file is in project root directory
+2. Check file permissions (should be readable)
+3. Ensure variable names match exactly (case-sensitive)
+4. Restart the application after changing `.env`
+5. In Docker, verify variables are passed with `-e` flag
+
+<Info>
+For additional configuration options and advanced setup, refer to the Express.js and MongoDB documentation.
+</Info>

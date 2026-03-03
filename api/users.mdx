@@ -1,0 +1,528 @@
+---
+title: Users API
+description: Manage user accounts, profiles, and pet ownership in the Adoptme system
+---
+
+## Overview
+
+The Users API provides endpoints for managing user accounts in the Adoptme system. Users can be listed, retrieved, updated, and deleted. Each user has a profile with personal information and a list of adopted pets.
+
+**Base Path:** `/api/users`
+
+**Source Files:**
+- Routes: `src/routes/users.router.js`
+- Controller: `src/controllers/users.controller.js`
+- Model: `src/dao/models/User.js`
+
+## User Model
+
+The User schema includes the following fields:
+
+<ResponseField name="_id" type="ObjectId" required>
+  MongoDB-generated unique identifier
+</ResponseField>
+
+<ResponseField name="first_name" type="string" required>
+  User's first name
+</ResponseField>
+
+<ResponseField name="last_name" type="string" required>
+  User's last name
+</ResponseField>
+
+<ResponseField name="email" type="string" required>
+  User's email address (must be unique)
+</ResponseField>
+
+<ResponseField name="password" type="string" required>
+  Hashed password (bcrypt)
+</ResponseField>
+
+<ResponseField name="role" type="string" default="user">
+  User role (default: "user")
+</ResponseField>
+
+<ResponseField name="pets" type="array" default="[]">
+  Array of pet ObjectIds that the user has adopted
+  ```json
+  [
+    { "_id": "60acc54545c8e82e0475100a" },
+    { "_id": "60acc54545c8e82e0475100b" }
+  ]
+  ```
+</ResponseField>
+
+---
+
+## Get All Users
+
+<CodeGroup>
+```bash cURL
+curl -X GET http://localhost:8080/api/users
+```
+
+```javascript JavaScript
+fetch('http://localhost:8080/api/users')
+  .then(res => res.json())
+  .then(data => console.log(data));
+```
+
+```python Python
+import requests
+
+response = requests.get('http://localhost:8080/api/users')
+print(response.json())
+```
+</CodeGroup>
+
+### Endpoint
+
+```
+GET /api/users
+```
+
+Retrieves a list of all users in the system.
+
+### Response
+
+<ResponseField name="status" type="string">
+  "success"
+</ResponseField>
+
+<ResponseField name="payload" type="array">
+  Array of user objects
+</ResponseField>
+
+### Example Response
+
+```json
+{
+  "status": "success",
+  "payload": [
+    {
+      "_id": "6893eaba2ac0b16fa177be7a",
+      "first_name": "Jerónimo",
+      "last_name": "Arroyo Alonzo",
+      "email": "Jeronimo_ArroyoAlonzo63@gmail.com",
+      "password": "$2b$10$xjkkakjsiz...",
+      "role": "user",
+      "pets": []
+    },
+    {
+      "_id": "6893eaba2ac0b16fa177be7b",
+      "first_name": "María",
+      "last_name": "González",
+      "email": "maria.gonzalez@example.com",
+      "password": "$2b$10$abc123...",
+      "role": "user",
+      "pets": [
+        { "_id": "60acc54545c8e82e0475100a" }
+      ]
+    }
+  ]
+}
+```
+
+### Error Responses
+
+<Expandable title="500 Internal Server Error">
+```text
+Ha ocurrido un error en la petición, por favor ver detalle: [error]
+```
+</Expandable>
+
+---
+
+## Get User by ID
+
+<CodeGroup>
+```bash cURL
+curl -X GET http://localhost:8080/api/users/6893eaba2ac0b16fa177be7a
+```
+
+```javascript JavaScript
+const userId = '6893eaba2ac0b16fa177be7a';
+fetch(`http://localhost:8080/api/users/${userId}`)
+  .then(res => res.json())
+  .then(data => console.log(data));
+```
+
+```python Python
+import requests
+
+user_id = '6893eaba2ac0b16fa177be7a'
+response = requests.get(f'http://localhost:8080/api/users/{user_id}')
+print(response.json())
+```
+</CodeGroup>
+
+### Endpoint
+
+```
+GET /api/users/:uid
+```
+
+Retrieves a single user by their unique ID.
+
+### Path Parameters
+
+<ParamField path="uid" type="string" required>
+  The unique identifier (MongoDB ObjectId) of the user
+</ParamField>
+
+### Response
+
+<ResponseField name="status" type="string">
+  "success"
+</ResponseField>
+
+<ResponseField name="payload" type="object">
+  User object with all fields
+</ResponseField>
+
+### Example Response
+
+```json
+{
+  "status": "success",
+  "payload": {
+    "_id": "6893eaba2ac0b16fa177be7a",
+    "first_name": "Jerónimo",
+    "last_name": "Arroyo Alonzo",
+    "email": "Jeronimo_ArroyoAlonzo63@gmail.com",
+    "password": "$2b$10$xjkkakjsiz...",
+    "role": "user",
+    "pets": []
+  }
+}
+```
+
+### Error Responses
+
+<Expandable title="404 User Not Found">
+```json
+{
+  "status": "error",
+  "error": "User not found"
+}
+```
+Returned when the user with the specified ID doesn't exist.
+</Expandable>
+
+<Expandable title="500 Internal Server Error">
+```text
+Ha ocurrido un error en la petición, por favor ver detalle: [error]
+```
+</Expandable>
+
+---
+
+## Update User
+
+<CodeGroup>
+```bash cURL
+curl -X PUT http://localhost:8080/api/users/6893eaba2ac0b16fa177be7a \
+  -H "Content-Type: application/json" \
+  -d '{
+    "first_name": "Jerónimo",
+    "last_name": "Arroyo Pérez",
+    "email": "jeronimo.updated@example.com"
+  }'
+```
+
+```javascript JavaScript
+const userId = '6893eaba2ac0b16fa177be7a';
+fetch(`http://localhost:8080/api/users/${userId}`, {
+  method: 'PUT',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    first_name: 'Jerónimo',
+    last_name: 'Arroyo Pérez',
+    email: 'jeronimo.updated@example.com'
+  })
+})
+.then(res => res.json())
+.then(data => console.log(data));
+```
+
+```python Python
+import requests
+
+user_id = '6893eaba2ac0b16fa177be7a'
+data = {
+    'first_name': 'Jerónimo',
+    'last_name': 'Arroyo Pérez',
+    'email': 'jeronimo.updated@example.com'
+}
+
+response = requests.put(
+    f'http://localhost:8080/api/users/{user_id}',
+    json=data
+)
+print(response.json())
+```
+</CodeGroup>
+
+### Endpoint
+
+```
+PUT /api/users/:uid
+```
+
+Updates an existing user's information.
+
+### Path Parameters
+
+<ParamField path="uid" type="string" required>
+  The unique identifier (MongoDB ObjectId) of the user to update
+</ParamField>
+
+### Request Body
+
+Send any user fields you want to update. All fields are optional:
+
+<ParamField body="first_name" type="string">
+  Updated first name
+</ParamField>
+
+<ParamField body="last_name" type="string">
+  Updated last name
+</ParamField>
+
+<ParamField body="email" type="string">
+  Updated email address
+</ParamField>
+
+<ParamField body="role" type="string">
+  Updated role
+</ParamField>
+
+<ParamField body="pets" type="array">
+  Updated pets array (array of pet ObjectIds)
+</ParamField>
+
+<Warning>
+  Do not update the password field directly through this endpoint. Password updates should go through proper authentication flows with hashing.
+</Warning>
+
+### Example Request Body
+
+```json
+{
+  "first_name": "Jerónimo",
+  "last_name": "Arroyo Pérez",
+  "email": "jeronimo.updated@example.com"
+}
+```
+
+### Response
+
+<ResponseField name="status" type="string">
+  "success"
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  "User updated"
+</ResponseField>
+
+### Example Response
+
+```json
+{
+  "status": "success",
+  "message": "User updated"
+}
+```
+
+### Error Responses
+
+<Expandable title="404 User Not Found">
+```json
+{
+  "status": "error",
+  "error": "User not found"
+}
+```
+Returned when the user with the specified ID doesn't exist.
+</Expandable>
+
+<Expandable title="500 Internal Server Error">
+```text
+Ha ocurrido un error en la petición, por favor ver detalle: [error]
+```
+</Expandable>
+
+---
+
+## Delete User
+
+<CodeGroup>
+```bash cURL
+curl -X DELETE http://localhost:8080/api/users/6893eaba2ac0b16fa177be7a
+```
+
+```javascript JavaScript
+const userId = '6893eaba2ac0b16fa177be7a';
+fetch(`http://localhost:8080/api/users/${userId}`, {
+  method: 'DELETE'
+})
+.then(res => res.json())
+.then(data => console.log(data));
+```
+
+```python Python
+import requests
+
+user_id = '6893eaba2ac0b16fa177be7a'
+response = requests.delete(f'http://localhost:8080/api/users/{user_id}')
+print(response.json())
+```
+</CodeGroup>
+
+### Endpoint
+
+```
+DELETE /api/users/:uid
+```
+
+Deletes a user from the system.
+
+### Path Parameters
+
+<ParamField path="uid" type="string" required>
+  The unique identifier (MongoDB ObjectId) of the user to delete
+</ParamField>
+
+### Response
+
+<ResponseField name="status" type="string">
+  "success"
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  "User deleted"
+</ResponseField>
+
+### Example Response
+
+```json
+{
+  "status": "success",
+  "message": "User deleted"
+}
+```
+
+### Error Responses
+
+<Expandable title="404 User Not Found">
+```json
+{
+  "status": "error",
+  "error": "User not found"
+}
+```
+Returned when the user with the specified ID doesn't exist.
+</Expandable>
+
+<Expandable title="500 Internal Server Error">
+```text
+Ha ocurrido un error en la petición, por favor ver detalle: [error]
+```
+</Expandable>
+
+<Warning>
+  Deleting a user does not automatically delete their adoptions or remove them from adopted pets. You may need to handle these relationships separately.
+</Warning>
+
+---
+
+## Implementation Details
+
+### Controller Source
+
+The Users controller (`src/controllers/users.controller.js`) implements the following logic:
+
+<Expandable title="getAllUsers - Lines 3-11">
+```javascript
+const getAllUsers = async(req,res)=>{
+    try {
+        const users = await usersService.getAll();
+        res.send({status:"success",payload:users})        
+    } catch (error) {
+        res.status(500).send("Ha ocurrido un error en la petición, por favor ver detalle: ",error)
+    }
+}
+```
+</Expandable>
+
+<Expandable title="getUser - Lines 13-23">
+```javascript
+const getUser = async(req,res)=> {
+    try {
+        const userId = req.params.uid;
+        const user = await usersService.getUserById(userId);
+        if(!user) return res.status(404).send({status:"error",error:"User not found"})
+        res.send({status:"success",payload:user})        
+    } catch (error) {
+        res.status(500).send("Ha ocurrido un error en la petición, por favor ver detalle: ",error)
+    }
+}
+```
+</Expandable>
+
+<Expandable title="updateUser - Lines 25-37">
+```javascript
+const updateUser =async(req,res)=>{
+    try {
+        const updateBody = req.body;
+        const userId = req.params.uid;
+        const user = await usersService.getUserById(userId);
+        if(!user) return res.status(404).send({status:"error", error:"User not found"})
+        const result = await usersService.update(userId,updateBody);
+        res.send({status:"success",message:"User updated"})        
+    } catch (error) {
+        res.status(500).send("Ha ocurrido un error en la petición, por favor ver detalle: ",error)
+    }
+}
+```
+</Expandable>
+
+<Expandable title="deleteUser - Lines 39-50">
+```javascript
+const deleteUser = async(req,res) =>{
+    try {
+        const userId = req.params.uid;
+        const user = await usersService.getUserById(userId);
+        if(!user) return res.status(404).send({status:"error", error:"User not found"})
+        const result = await usersService.delete(user);
+        res.send({status:"success",message:"User deleted"})        
+    } catch (error) {
+        res.status(500).send("Ha ocurrido un error en la petición, por favor ver detalle: ",error)
+    }
+}
+```
+</Expandable>
+
+### Router Configuration
+
+Routes are defined in `src/routes/users.router.js`:
+
+```javascript
+router.get('/', usersController.getAllUsers);
+router.get('/:uid', usersController.getUser);
+router.put('/:uid', usersController.updateUser);
+router.delete('/:uid', usersController.deleteUser);
+```
+
+---
+
+## Related Endpoints
+
+<CardGroup cols={2}>
+  <Card title="Sessions API" icon="key" href="/api/sessions">
+    Register and authenticate users
+  </Card>
+  <Card title="Adoptions API" icon="heart" href="/api/adoptions">
+    Link users to adopted pets
+  </Card>
+</CardGroup>

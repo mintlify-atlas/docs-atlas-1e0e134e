@@ -1,0 +1,230 @@
+---
+title: 'Docker Deployment'
+description: 'Deploy the Adoptme API using Docker containers'
+---
+
+## Overview
+
+The Adoptme API is fully containerized and can be deployed using Docker. This guide covers building the Docker image, pushing it to Docker Hub, and running the containerized application.
+
+## Prerequisites
+
+- Docker installed (Docker Desktop or Docker Engine)
+- Docker Hub account (for pushing images)
+- Node.js 20.11.0 or higher
+- MongoDB connection URL
+
+## Dockerfile Configuration
+
+The project uses the following Dockerfile:
+
+```dockerfile
+FROM node:20.11.0
+
+WORKDIR /app
+
+COPY package*.json ./
+
+RUN npm install
+
+COPY ./src ./src
+
+EXPOSE 3000
+
+CMD ["npm","start"]
+```
+
+### Key Configuration Details
+
+- **Base Image**: Node.js 20.11.0
+- **Working Directory**: `/app`
+- **Exposed Port**: 3000
+- **Start Command**: `npm start`
+
+### Docker Ignore File
+
+The `.dockerignore` file excludes sensitive files from the image:
+
+```
+./.env
+```
+
+<Warning>
+Environment variables are not included in the Docker image. You must provide them at runtime when starting the container.
+</Warning>
+
+## Building and Deploying
+
+<Steps>
+  <Step title="Build the Docker Image">
+    Navigate to the project directory and build the image:
+
+    ```bash
+    docker build -t DOCKER_USERNAME/serverxxxx:1.0.0 .
+    ```
+
+    Replace `DOCKER_USERNAME` with your Docker Hub username and `serverxxxx` with your desired image name.
+
+    **Real Example:**
+    ```bash
+    docker build -t fabil2025/serverentregafinal:1.0.0 .
+    ```
+
+    Verify the image was created successfully in Docker Desktop or by running:
+    ```bash
+    docker images
+    ```
+  </Step>
+
+  <Step title="Push to Docker Hub">
+    Push your image to Docker Hub:
+
+    ```bash
+    docker push DOCKER_USERNAME/serverxxxx:1.0.0
+    ```
+
+    **Real Example:**
+    ```bash
+    docker push fabil2025/serverentregafinal:1.0.0
+    ```
+
+    The image will be available at `https://hub.docker.com/r/DOCKER_USERNAME/serverxxxx`
+  </Step>
+
+  <Step title="Pull the Image (Optional)">
+    On the deployment server, pull the image from Docker Hub:
+
+    ```bash
+    docker pull fabil2025/serverentregafinal:1.0.0
+    ```
+
+    Or download it directly from Docker Hub at: `https://hub.docker.com/r/fabil2025/serverentregafinal`
+  </Step>
+
+  <Step title="Run the Container">
+    Start the container with required environment variables:
+
+    ```bash
+    docker run -d \
+      --name adoptme-api \
+      -p 8080:3000 \
+      -e PORT=3000 \
+      -e MONGO_URL=mongodb://your-mongo-host:27017 \
+      -e DB_NAME=adoptme \
+      fabil2025/serverentregafinal:1.0.0
+    ```
+
+    <Note>
+    The `-p 8080:3000` flag maps port 8080 on your host to port 3000 in the container. Adjust the host port as needed.
+    </Note>
+  </Step>
+</Steps>
+
+## Container Configuration
+
+### Required Environment Variables
+
+The container requires the following environment variables to start successfully:
+
+| Variable | Description | Example |
+|----------|-------------|----------|
+| `PORT` | Internal application port | `3000` |
+| `MONGO_URL` | MongoDB connection URL | `mongodb://host:27017` |
+| `DB_NAME` | Database name | `adoptme` |
+
+<Warning>
+The application will fail to start without `MONGO_URL` and `DB_NAME` as it connects to MongoDB during initialization.
+</Warning>
+
+### Docker Desktop Configuration
+
+When running the container through Docker Desktop:
+
+1. Click the Play button next to the image
+2. Configure the following settings:
+   - **Container Name**: Choose a descriptive name (e.g., `adoptme-api`)
+   - **Ports**: Map an external port to internal port 3000 (e.g., `8080:3000`)
+   - **Environment Variables**:
+     ```
+     PORT=3000
+     MONGO_URL=your_mongodb_connection_string
+     DB_NAME=adoptme
+     ```
+
+### Port Mapping
+
+The Dockerfile exposes port 3000. When running the container, map it to any available host port:
+
+```bash
+# Map to port 8080
+docker run -p 8080:3000 ...
+
+# Map to port 3000 (same port)
+docker run -p 3000:3000 ...
+
+# Map to port 80 (requires root/admin)
+docker run -p 80:3000 ...
+```
+
+### Volumes (Optional)
+
+For persistent logging or file storage, mount volumes:
+
+```bash
+docker run -d \
+  -v /path/on/host/logs:/app/logs \
+  -e PORT=3000 \
+  -e MONGO_URL=mongodb://host:27017 \
+  -e DB_NAME=adoptme \
+  fabil2025/serverentregafinal:1.0.0
+```
+
+## Testing the Deployment
+
+Once the container is running, verify the deployment:
+
+<CodeGroup>
+```bash Health Check
+curl http://localhost:8080/api/health
+```
+
+```bash Swagger Docs
+curl http://localhost:8080/docs
+```
+
+```bash Test API Endpoint
+curl http://localhost:8080/api/pets
+```
+</CodeGroup>
+
+## Troubleshooting
+
+### Container Won't Start
+
+1. Check the container logs:
+   ```bash
+   docker logs adoptme-api
+   ```
+
+2. Verify environment variables are set correctly:
+   ```bash
+   docker inspect adoptme-api | grep -A 10 Env
+   ```
+
+3. Ensure MongoDB is accessible from the container
+
+### Connection Refused
+
+- Verify port mapping with `docker ps`
+- Check firewall rules on the host
+- Ensure the application is listening on 0.0.0.0 inside the container
+
+### MongoDB Connection Errors
+
+- Verify `MONGO_URL` includes the correct protocol (`mongodb://` or `mongodb+srv://`)
+- Check MongoDB authentication credentials
+- Ensure MongoDB allows connections from the Docker network
+
+<Info>
+For production deployments, consider using Docker Compose or Kubernetes for better orchestration and scaling capabilities.
+</Info>

@@ -1,0 +1,685 @@
+---
+title: Sessions API
+description: User authentication endpoints for registration, login, and session management with JWT tokens
+---
+
+## Overview
+
+The Sessions API handles user authentication in the Adoptme system. It provides endpoints for user registration, login with JWT token generation, and retrieving the current authenticated user.
+
+**Base Path:** `/api/sessions`
+
+**Source Files:**
+- Routes: `src/routes/sessions.router.js`
+- Controller: `src/controllers/sessions.controller.js`
+
+## Authentication Method
+
+The API uses **JWT (JSON Web Tokens)** stored in **HTTP cookies** for authentication:
+
+- **Cookie Name:** `coderCookie` (protected) or `unprotectedCookie` (unprotected)
+- **Token Expiration:** 1 hour
+- **JWT Secret:** `tokenSecretJWT` (hardcoded in source)
+- **Cookie Max Age:** 3600000ms (1 hour)
+
+<Warning>
+  The JWT secret `tokenSecretJWT` is hardcoded in the controller. For production, move this to environment variables.
+</Warning>
+
+---
+
+## Register User
+
+<CodeGroup>
+```bash cURL
+curl -X POST http://localhost:8080/api/sessions/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "first_name": "John",
+    "last_name": "Doe",
+    "email": "john.doe@example.com",
+    "password": "securePassword123"
+  }'
+```
+
+```javascript JavaScript
+fetch('http://localhost:8080/api/sessions/register', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    first_name: 'John',
+    last_name: 'Doe',
+    email: 'john.doe@example.com',
+    password: 'securePassword123'
+  })
+})
+.then(res => res.json())
+.then(data => console.log(data));
+```
+
+```python Python
+import requests
+
+data = {
+    'first_name': 'John',
+    'last_name': 'Doe',
+    'email': 'john.doe@example.com',
+    'password': 'securePassword123'
+}
+
+response = requests.post(
+    'http://localhost:8080/api/sessions/register',
+    json=data
+)
+print(response.json())
+```
+</CodeGroup>
+
+### Endpoint
+
+```
+POST /api/sessions/register
+```
+
+Registers a new user in the system. Passwords are hashed using bcrypt before storage.
+
+### Request Body
+
+<ParamField body="first_name" type="string" required>
+  User's first name
+</ParamField>
+
+<ParamField body="last_name" type="string" required>
+  User's last name
+</ParamField>
+
+<ParamField body="email" type="string" required>
+  User's email address (must be unique)
+</ParamField>
+
+<ParamField body="password" type="string" required>
+  User's password (will be hashed with bcrypt before storage)
+</ParamField>
+
+### Example Request Body
+
+```json
+{
+  "first_name": "John",
+  "last_name": "Doe",
+  "email": "john.doe@example.com",
+  "password": "securePassword123"
+}
+```
+
+### Response
+
+<ResponseField name="status" type="string">
+  "success"
+</ResponseField>
+
+<ResponseField name="payload" type="string">
+  The newly created user's ObjectId
+</ResponseField>
+
+### Example Response
+
+```json
+{
+  "status": "success",
+  "payload": "6893eaba2ac0b16fa177be7c"
+}
+```
+
+### Implementation Details
+
+Password hashing (from `src/controllers/sessions.controller.js:12`):
+
+```javascript
+const hashedPassword = await createHash(password);
+const user = {
+    first_name,
+    last_name,
+    email,
+    password: hashedPassword
+}
+let result = await usersService.create(user);
+```
+
+### Error Responses
+
+<Expandable title="400 Incomplete Values">
+```json
+{
+  "status": "error",
+  "error": "Incomplete values"
+}
+```
+Returned when any required field is missing.
+</Expandable>
+
+<Expandable title="400 User Already Exists">
+```json
+{
+  "status": "error",
+  "error": "User already exists"
+}
+```
+Returned when trying to register with an email that's already in use.
+</Expandable>
+
+<Expandable title="500 Internal Server Error">
+```text
+Ha ocurrido un error en la petición, por favor ver detalle: [error]
+```
+</Expandable>
+
+---
+
+## Login
+
+<CodeGroup>
+```bash cURL
+curl -X POST http://localhost:8080/api/sessions/login \
+  -H "Content-Type: application/json" \
+  -c cookies.txt \
+  -d '{
+    "email": "john.doe@example.com",
+    "password": "securePassword123"
+  }'
+```
+
+```javascript JavaScript
+fetch('http://localhost:8080/api/sessions/login', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  credentials: 'include', // Important: include cookies
+  body: JSON.stringify({
+    email: 'john.doe@example.com',
+    password: 'securePassword123'
+  })
+})
+.then(res => res.json())
+.then(data => console.log(data));
+```
+
+```python Python
+import requests
+
+data = {
+    'email': 'john.doe@example.com',
+    'password': 'securePassword123'
+}
+
+response = requests.post(
+    'http://localhost:8080/api/sessions/login',
+    json=data
+)
+
+# Save cookies for subsequent requests
+print(response.cookies)
+print(response.json())
+```
+</CodeGroup>
+
+### Endpoint
+
+```
+POST /api/sessions/login
+```
+
+Authenticates a user and returns a JWT token in a cookie.
+
+### Request Body
+
+<ParamField body="email" type="string" required>
+  User's email address
+</ParamField>
+
+<ParamField body="password" type="string" required>
+  User's password (plain text - will be validated against hashed password)
+</ParamField>
+
+### Example Request Body
+
+```json
+{
+  "email": "john.doe@example.com",
+  "password": "securePassword123"
+}
+```
+
+### Response
+
+<ResponseField name="status" type="string">
+  "success"
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  "Logged in"
+</ResponseField>
+
+### Set-Cookie Header
+
+The response includes a `Set-Cookie` header with the JWT token:
+
+```
+Set-Cookie: coderCookie=<jwt_token>; Max-Age=3600000; Path=/; HttpOnly
+```
+
+### Example Response
+
+```json
+{
+  "status": "success",
+  "message": "Logged in"
+}
+```
+
+### JWT Token Payload
+
+The JWT token contains a UserDTO with the following fields (from `src/controllers/sessions.controller.js:35-36`):
+
+```javascript
+const userDto = UserDTO.getUserTokenFrom(user);
+const token = jwt.sign(userDto, 'tokenSecretJWT', {expiresIn:"1h"});
+```
+
+The UserDTO typically includes:
+- User ID
+- Email
+- Role
+- Other non-sensitive user information
+
+### Error Responses
+
+<Expandable title="400 Incomplete Values">
+```json
+{
+  "status": "error",
+  "error": "Incomplete values"
+}
+```
+Returned when email or password is missing.
+</Expandable>
+
+<Expandable title="404 User Doesn't Exist">
+```json
+{
+  "status": "error",
+  "error": "User doesn't exist"
+}
+```
+Returned when no user with the provided email exists.
+</Expandable>
+
+<Expandable title="400 Incorrect Password">
+```json
+{
+  "status": "error",
+  "error": "Incorrect password"
+}
+```
+Returned when the password doesn't match the stored hash.
+</Expandable>
+
+<Expandable title="500 Internal Server Error">
+```text
+Ha ocurrido un error en la petición, por favor ver detalle: [error]
+```
+</Expandable>
+
+---
+
+## Get Current User
+
+<CodeGroup>
+```bash cURL
+curl -X GET http://localhost:8080/api/sessions/current \
+  -b cookies.txt
+```
+
+```javascript JavaScript
+fetch('http://localhost:8080/api/sessions/current', {
+  credentials: 'include' // Important: include cookies
+})
+.then(res => res.json())
+.then(data => console.log(data));
+```
+
+```python Python
+import requests
+
+# Use session from login to maintain cookies
+session = requests.Session()
+
+# First login
+session.post(
+    'http://localhost:8080/api/sessions/login',
+    json={'email': 'john@example.com', 'password': 'pass123'}
+)
+
+# Then get current user
+response = session.get('http://localhost:8080/api/sessions/current')
+print(response.json())
+```
+</CodeGroup>
+
+### Endpoint
+
+```
+GET /api/sessions/current
+```
+
+Retrieves the currently authenticated user's information from the JWT token stored in the `coderCookie` cookie.
+
+### Headers Required
+
+```
+Cookie: coderCookie=<jwt_token>
+```
+
+The cookie is automatically sent by the browser if you're using `credentials: 'include'` in fetch or similar options in other HTTP clients.
+
+### Response
+
+<ResponseField name="status" type="string">
+  "success"
+</ResponseField>
+
+<ResponseField name="payload" type="object">
+  Decoded JWT token payload containing user information
+</ResponseField>
+
+### Example Response
+
+```json
+{
+  "status": "success",
+  "payload": {
+    "_id": "6893eaba2ac0b16fa177be7c",
+    "email": "john.doe@example.com",
+    "role": "user"
+  }
+}
+```
+
+### Implementation Details
+
+From `src/controllers/sessions.controller.js:43-51`:
+
+```javascript
+const current = async(req,res) =>{
+    try {
+        const cookie = req.cookies['coderCookie']
+        const user = jwt.verify(cookie,'tokenSecretJWT');
+        if(user)
+            return res.send({status:"success",payload:user})        
+    } catch (error) {
+        res.status(500).send("Ha ocurrido un error en la petición, por favor ver detalle: ",error)
+    }
+}
+```
+
+### Error Responses
+
+<Expandable title="500 Invalid/Expired Token">
+```text
+Ha ocurrido un error en la petición, por favor ver detalle: [error]
+```
+Returned when:
+- No cookie is present
+- Token is invalid or malformed
+- Token has expired (after 1 hour)
+- Token signature is invalid
+</Expandable>
+
+---
+
+## Unprotected Login
+
+<CodeGroup>
+```bash cURL
+curl -X GET "http://localhost:8080/api/sessions/unprotectedLogin?email=john@example.com&password=pass123"
+```
+
+```javascript JavaScript
+const email = 'john@example.com';
+const password = 'pass123';
+
+fetch(`http://localhost:8080/api/sessions/unprotectedLogin?email=${email}&password=${password}`, {
+  credentials: 'include'
+})
+.then(res => res.json())
+.then(data => console.log(data));
+```
+</CodeGroup>
+
+### Endpoint
+
+```
+GET /api/sessions/unprotectedLogin
+```
+
+An alternative login endpoint that uses query parameters instead of request body and stores the full user object (not just a DTO) in the JWT token.
+
+<Warning>
+  This endpoint is called "unprotected" because it stores the complete user object (including hashed password) in the JWT token, which is a security risk. Use the regular `/login` endpoint in production.
+</Warning>
+
+### Query Parameters
+
+<ParamField query="email" type="string" required>
+  User's email address
+</ParamField>
+
+<ParamField query="password" type="string" required>
+  User's password
+</ParamField>
+
+### Response
+
+Sets cookie `unprotectedCookie` and returns:
+
+```json
+{
+  "status": "success",
+  "message": "Unprotected Logged in"
+}
+```
+
+### Implementation Note
+
+From `src/controllers/sessions.controller.js:62`:
+
+```javascript
+const token = jwt.sign(user, 'tokenSecretJWT', {expiresIn:"1h"});
+res.cookie('unprotectedCookie', token, {maxAge:3600000})
+```
+
+Notice it signs the entire `user` object, not a sanitized DTO.
+
+---
+
+## Unprotected Current User
+
+<CodeGroup>
+```bash cURL
+curl -X GET http://localhost:8080/api/sessions/unprotectedCurrent \
+  -b cookies.txt
+```
+
+```javascript JavaScript
+fetch('http://localhost:8080/api/sessions/unprotectedCurrent', {
+  credentials: 'include'
+})
+.then(res => res.json())
+.then(data => console.log(data));
+```
+</CodeGroup>
+
+### Endpoint
+
+```
+GET /api/sessions/unprotectedCurrent
+```
+
+Retrieves the current user from the `unprotectedCookie` cookie.
+
+### Response
+
+```json
+{
+  "status": "success",
+  "payload": {
+    "_id": "6893eaba2ac0b16fa177be7c",
+    "first_name": "John",
+    "last_name": "Doe",
+    "email": "john.doe@example.com",
+    "password": "$2b$10$hashedpassword...",
+    "role": "user",
+    "pets": []
+  }
+}
+```
+
+<Warning>
+  The response includes the hashed password, which should never be exposed. This is why this endpoint is "unprotected" - it's less secure.
+</Warning>
+
+---
+
+## Complete Authentication Flow
+
+### 1. Register
+
+```bash
+curl -X POST http://localhost:8080/api/sessions/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "first_name": "Jane",
+    "last_name": "Smith",
+    "email": "jane@example.com",
+    "password": "mypassword"
+  }'
+```
+
+Response:
+```json
+{
+  "status": "success",
+  "payload": "6893eaba2ac0b16fa177be7d"
+}
+```
+
+### 2. Login
+
+```bash
+curl -X POST http://localhost:8080/api/sessions/login \
+  -H "Content-Type: application/json" \
+  -c cookies.txt \
+  -d '{
+    "email": "jane@example.com",
+    "password": "mypassword"
+  }'
+```
+
+Response:
+```json
+{
+  "status": "success",
+  "message": "Logged in"
+}
+```
+
+### 3. Access Protected Resources
+
+```bash
+curl -X GET http://localhost:8080/api/sessions/current \
+  -b cookies.txt
+```
+
+Response:
+```json
+{
+  "status": "success",
+  "payload": {
+    "_id": "6893eaba2ac0b16fa177be7d",
+    "email": "jane@example.com",
+    "role": "user"
+  }
+}
+```
+
+---
+
+## Implementation Details
+
+### Password Hashing
+
+Passwords are hashed using bcrypt via the `createHash` utility function from `src/utils/index.js`.
+
+### Password Validation
+
+Password validation uses the `passwordValidation` utility function (from `src/controllers/sessions.controller.js:33`):
+
+```javascript
+const isValidPassword = await passwordValidation(user, password);
+if(!isValidPassword) return res.status(400).send({status:"error",error:"Incorrect password"});
+```
+
+### Router Configuration
+
+Routes are defined in `src/routes/sessions.router.js`:
+
+```javascript
+router.post('/register', sessionsController.register);
+router.post('/login', sessionsController.login);
+router.get('/current', sessionsController.current);
+router.get('/unprotectedLogin', sessionsController.unprotectedLogin);
+router.get('/unprotectedCurrent', sessionsController.unprotectedCurrent);
+```
+
+---
+
+## Security Considerations
+
+<Warning>
+  **Hardcoded JWT Secret:** The JWT secret `tokenSecretJWT` is hardcoded in the controller. Move this to environment variables:
+  ```javascript
+  const token = jwt.sign(userDto, process.env.JWT_SECRET, {expiresIn:"1h"});
+  ```
+</Warning>
+
+<Warning>
+  **Unprotected Endpoints:** The `/unprotectedLogin` and `/unprotectedCurrent` endpoints store/expose the full user object including the hashed password. These should not be used in production.
+</Warning>
+
+<Note>
+  **Cookie Security:** Consider adding `httpOnly`, `secure`, and `sameSite` flags to cookies:
+  ```javascript
+  res.cookie('coderCookie', token, {
+    maxAge: 3600000,
+    httpOnly: true,
+    secure: true, // HTTPS only
+    sameSite: 'strict'
+  })
+  ```
+</Note>
+
+<Note>
+  **Token Expiration:** Tokens expire after 1 hour. After expiration, users must log in again. Consider implementing refresh tokens for better UX.
+</Note>
+
+---
+
+## Related Endpoints
+
+<CardGroup cols={2}>
+  <Card title="Users API" icon="users" href="/api/users">
+    Manage user profiles after authentication
+  </Card>
+  <Card title="Adoptions API" icon="heart" href="/api/adoptions">
+    Create adoptions as an authenticated user
+  </Card>
+</CardGroup>

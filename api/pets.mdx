@@ -1,0 +1,656 @@
+---
+title: Pets API
+description: Manage pets available for adoption, including image uploads and adoption status
+---
+
+## Overview
+
+The Pets API provides endpoints for managing pets in the Adoptme system. You can create, retrieve, update, and delete pet records. The API also supports image uploads for pets using multipart/form-data.
+
+**Base Path:** `/api/pets`
+
+**Source Files:**
+- Routes: `src/routes/pets.router.js`
+- Controller: `src/controllers/pets.controller.js`
+- Model: `src/dao/models/Pet.js`
+
+## Pet Model
+
+The Pet schema includes the following fields:
+
+<ResponseField name="_id" type="ObjectId" required>
+  MongoDB-generated unique identifier
+</ResponseField>
+
+<ResponseField name="name" type="string" required>
+  Pet's name
+</ResponseField>
+
+<ResponseField name="specie" type="string" required>
+  Pet's species (e.g., "dog", "cat", "bird")
+</ResponseField>
+
+<ResponseField name="birthDate" type="Date">
+  Pet's birth date
+</ResponseField>
+
+<ResponseField name="adopted" type="boolean" default="false">
+  Whether the pet has been adopted
+</ResponseField>
+
+<ResponseField name="owner" type="ObjectId">
+  Reference to the User who adopted this pet (only set when adopted is true)
+</ResponseField>
+
+<ResponseField name="image" type="string">
+  File path to the pet's image (set when using the withimage endpoint)
+</ResponseField>
+
+---
+
+## Get All Pets
+
+<CodeGroup>
+```bash cURL
+curl -X GET http://localhost:8080/api/pets
+```
+
+```javascript JavaScript
+fetch('http://localhost:8080/api/pets')
+  .then(res => res.json())
+  .then(data => console.log(data));
+```
+
+```python Python
+import requests
+
+response = requests.get('http://localhost:8080/api/pets')
+print(response.json())
+```
+</CodeGroup>
+
+### Endpoint
+
+```
+GET /api/pets
+```
+
+Retrieves a list of all pets in the system.
+
+### Response
+
+<ResponseField name="status" type="string">
+  "success"
+</ResponseField>
+
+<ResponseField name="payload" type="array">
+  Array of pet objects
+</ResponseField>
+
+### Example Response
+
+```json
+{
+  "status": "success",
+  "payload": [
+    {
+      "_id": "65abc123def456789",
+      "name": "Max",
+      "specie": "dog",
+      "birthDate": "2020-05-15T00:00:00.000Z",
+      "adopted": false,
+      "image": "/src/public/img/max_1234567890.jpg"
+    },
+    {
+      "_id": "65abc123def456790",
+      "name": "Luna",
+      "specie": "cat",
+      "birthDate": "2021-08-22T00:00:00.000Z",
+      "adopted": true,
+      "owner": "6893eaba2ac0b16fa177be7a"
+    }
+  ]
+}
+```
+
+### Error Responses
+
+<Expandable title="500 Internal Server Error">
+```text
+Ha ocurrido un error en la petición, por favor ver detalle: [error]
+```
+</Expandable>
+
+---
+
+## Create Pet
+
+<CodeGroup>
+```bash cURL
+curl -X POST http://localhost:8080/api/pets \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Buddy",
+    "specie": "dog",
+    "birthDate": "2022-03-10"
+  }'
+```
+
+```javascript JavaScript
+fetch('http://localhost:8080/api/pets', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    name: 'Buddy',
+    specie: 'dog',
+    birthDate: '2022-03-10'
+  })
+})
+.then(res => res.json())
+.then(data => console.log(data));
+```
+
+```python Python
+import requests
+
+data = {
+    'name': 'Buddy',
+    'specie': 'dog',
+    'birthDate': '2022-03-10'
+}
+
+response = requests.post(
+    'http://localhost:8080/api/pets',
+    json=data
+)
+print(response.json())
+```
+</CodeGroup>
+
+### Endpoint
+
+```
+POST /api/pets
+```
+
+Creates a new pet without an image.
+
+### Request Body
+
+<ParamField body="name" type="string" required>
+  Pet's name
+</ParamField>
+
+<ParamField body="specie" type="string" required>
+  Pet's species (e.g., "dog", "cat", "bird", "rabbit")
+</ParamField>
+
+<ParamField body="birthDate" type="string" required>
+  Pet's birth date (ISO 8601 format or any valid date string)
+</ParamField>
+
+### Example Request Body
+
+```json
+{
+  "name": "Buddy",
+  "specie": "dog",
+  "birthDate": "2022-03-10"
+}
+```
+
+### Response
+
+<ResponseField name="status" type="string">
+  "success"
+</ResponseField>
+
+<ResponseField name="payload" type="object">
+  The created pet object
+</ResponseField>
+
+### Example Response
+
+```json
+{
+  "status": "success",
+  "payload": {
+    "_id": "65abc123def456791",
+    "name": "Buddy",
+    "specie": "dog",
+    "birthDate": "2022-03-10T00:00:00.000Z",
+    "adopted": false,
+    "pets": []
+  }
+}
+```
+
+### Error Responses
+
+<Expandable title="400 Incomplete Values">
+```json
+{
+  "status": "error",
+  "error": "Incomplete values"
+}
+```
+Returned when name, specie, or birthDate is missing.
+</Expandable>
+
+<Expandable title="500 Internal Server Error">
+```text
+Ha ocurrido un error en la petición, por favor ver detalle: [error]
+```
+</Expandable>
+
+---
+
+## Create Pet with Image
+
+<CodeGroup>
+```bash cURL
+curl -X POST http://localhost:8080/api/pets/withimage \
+  -F "name=Bella" \
+  -F "specie=cat" \
+  -F "birthDate=2021-07-20" \
+  -F "image=@/path/to/pet-photo.jpg"
+```
+
+```javascript JavaScript
+const formData = new FormData();
+formData.append('name', 'Bella');
+formData.append('specie', 'cat');
+formData.append('birthDate', '2021-07-20');
+formData.append('image', fileInput.files[0]); // File from input element
+
+fetch('http://localhost:8080/api/pets/withimage', {
+  method: 'POST',
+  body: formData
+})
+.then(res => res.json())
+.then(data => console.log(data));
+```
+
+```python Python
+import requests
+
+data = {
+    'name': 'Bella',
+    'specie': 'cat',
+    'birthDate': '2021-07-20'
+}
+
+files = {
+    'image': open('/path/to/pet-photo.jpg', 'rb')
+}
+
+response = requests.post(
+    'http://localhost:8080/api/pets/withimage',
+    data=data,
+    files=files
+)
+print(response.json())
+```
+</CodeGroup>
+
+### Endpoint
+
+```
+POST /api/pets/withimage
+```
+
+Creates a new pet with an uploaded image. This endpoint uses **multipart/form-data** for file uploads.
+
+<Note>
+  This endpoint uses **Multer** middleware for handling file uploads. The image is stored in `/src/public/img/` with a unique filename.
+</Note>
+
+### Request Body (multipart/form-data)
+
+<ParamField body="name" type="string" required>
+  Pet's name
+</ParamField>
+
+<ParamField body="specie" type="string" required>
+  Pet's species
+</ParamField>
+
+<ParamField body="birthDate" type="string" required>
+  Pet's birth date
+</ParamField>
+
+<ParamField body="image" type="file" required>
+  Image file (processed by multer middleware with field name 'image')
+</ParamField>
+
+### Response
+
+<ResponseField name="status" type="string">
+  "success"
+</ResponseField>
+
+<ResponseField name="payload" type="object">
+  The created pet object with image path
+</ResponseField>
+
+### Example Response
+
+```json
+{
+  "status": "success",
+  "payload": {
+    "_id": "65abc123def456792",
+    "name": "Bella",
+    "specie": "cat",
+    "birthDate": "2021-07-20T00:00:00.000Z",
+    "adopted": false,
+    "image": "/home/user/workspace/source/src/public/img/bella_1710345678901.jpg"
+  }
+}
+```
+
+### Implementation Details
+
+The image path is constructed using:
+```javascript
+image: `${__dirname}/../public/img/${file.filename}`
+```
+
+Where `file.filename` is generated by the Multer uploader middleware defined in `src/utils/uploader.js`.
+
+### Error Responses
+
+<Expandable title="400 Incomplete Values">
+```json
+{
+  "status": "error",
+  "error": "Incomplete values"
+}
+```
+Returned when name, specie, or birthDate is missing.
+</Expandable>
+
+<Expandable title="500 Internal Server Error">
+```text
+Ha ocurrido un error en la petición, por favor ver detalle: [error]
+```
+</Expandable>
+
+---
+
+## Update Pet
+
+<CodeGroup>
+```bash cURL
+curl -X PUT http://localhost:8080/api/pets/65abc123def456791 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Buddy Jr.",
+    "adopted": true
+  }'
+```
+
+```javascript JavaScript
+const petId = '65abc123def456791';
+fetch(`http://localhost:8080/api/pets/${petId}`, {
+  method: 'PUT',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    name: 'Buddy Jr.',
+    adopted: true
+  })
+})
+.then(res => res.json())
+.then(data => console.log(data));
+```
+
+```python Python
+import requests
+
+pet_id = '65abc123def456791'
+data = {
+    'name': 'Buddy Jr.',
+    'adopted': True
+}
+
+response = requests.put(
+    f'http://localhost:8080/api/pets/{pet_id}',
+    json=data
+)
+print(response.json())
+```
+</CodeGroup>
+
+### Endpoint
+
+```
+PUT /api/pets/:pid
+```
+
+Updates an existing pet's information.
+
+### Path Parameters
+
+<ParamField path="pid" type="string" required>
+  The unique identifier (MongoDB ObjectId) of the pet to update
+</ParamField>
+
+### Request Body
+
+Send any pet fields you want to update. All fields are optional:
+
+<ParamField body="name" type="string">
+  Updated pet name
+</ParamField>
+
+<ParamField body="specie" type="string">
+  Updated species
+</ParamField>
+
+<ParamField body="birthDate" type="string">
+  Updated birth date
+</ParamField>
+
+<ParamField body="adopted" type="boolean">
+  Updated adoption status
+</ParamField>
+
+<ParamField body="owner" type="string">
+  Updated owner ObjectId
+</ParamField>
+
+<ParamField body="image" type="string">
+  Updated image path
+</ParamField>
+
+### Example Request Body
+
+```json
+{
+  "name": "Buddy Jr.",
+  "adopted": true,
+  "owner": "6893eaba2ac0b16fa177be7a"
+}
+```
+
+<Warning>
+  Manually updating the `adopted` status and `owner` field should typically be done through the Adoptions API to ensure data consistency.
+</Warning>
+
+### Response
+
+<ResponseField name="status" type="string">
+  "success"
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  "pet updated"
+</ResponseField>
+
+### Example Response
+
+```json
+{
+  "status": "success",
+  "message": "pet updated"
+}
+```
+
+### Error Responses
+
+<Expandable title="500 Internal Server Error">
+```text
+Ha ocurrido un error en la petición, por favor ver detalle: [error]
+```
+</Expandable>
+
+---
+
+## Delete Pet
+
+<CodeGroup>
+```bash cURL
+curl -X DELETE http://localhost:8080/api/pets/65abc123def456791
+```
+
+```javascript JavaScript
+const petId = '65abc123def456791';
+fetch(`http://localhost:8080/api/pets/${petId}`, {
+  method: 'DELETE'
+})
+.then(res => res.json())
+.then(data => console.log(data));
+```
+
+```python Python
+import requests
+
+pet_id = '65abc123def456791'
+response = requests.delete(f'http://localhost:8080/api/pets/{pet_id}')
+print(response.json())
+```
+</CodeGroup>
+
+### Endpoint
+
+```
+DELETE /api/pets/:pid
+```
+
+Deletes a pet from the system.
+
+### Path Parameters
+
+<ParamField path="pid" type="string" required>
+  The unique identifier (MongoDB ObjectId) of the pet to delete
+</ParamField>
+
+### Response
+
+<ResponseField name="status" type="string">
+  "success"
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  "pet deleted"
+</ResponseField>
+
+### Example Response
+
+```json
+{
+  "status": "success",
+  "message": "pet deleted"
+}
+```
+
+### Error Responses
+
+<Expandable title="500 Internal Server Error">
+```text
+Ha ocurrido un error en la petición, por favor ver detalle: [error]
+```
+</Expandable>
+
+<Warning>
+  Deleting a pet does not automatically update related users or adoptions. You may need to handle these relationships separately.
+</Warning>
+
+---
+
+## Implementation Details
+
+### Controller Source
+
+The Pets controller (`src/controllers/pets.controller.js`) implements the following key logic:
+
+<Expandable title="createPet - Lines 14-24">
+```javascript
+const createPet = async(req,res)=> {
+    try {
+        const {name,specie,birthDate} = req.body;
+        if(!name||!specie||!birthDate) return res.status(400).send({status:"error",error:"Incomplete values"})
+        const pet = PetDTO.getPetInputFrom({name,specie,birthDate});
+        const result = await petsService.create(pet);
+        res.send({status:"success",payload:result})        
+    } catch (error) {
+        res.status(500).send("Ha ocurrido un error en la petición, por favor ver detalle: ",error)    
+    }
+}
+```
+</Expandable>
+
+<Expandable title="createPetWithImage - Lines 48-67">
+```javascript
+const createPetWithImage = async(req,res) =>{
+    try {
+        const file = req.file;
+        const {name,specie,birthDate} = req.body;
+        if(!name||!specie||!birthDate) return res.status(400).send({status:"error",error:"Incomplete values"})
+        console.log(file);
+        const pet = PetDTO.getPetInputFrom({
+            name,
+            specie,
+            birthDate,
+            image:`${__dirname}/../public/img/${file.filename}`
+        });
+        console.log(pet);
+        const result = await petsService.create(pet);
+        res.send({status:"success",payload:result})        
+    } catch (error) {
+        res.status(500).send("Ha ocurrido un error en la petición, por favor ver detalle: ",error)
+    }
+}
+```
+</Expandable>
+
+### Router Configuration
+
+Routes are defined in `src/routes/pets.router.js`:
+
+```javascript
+router.get('/', petsController.getAllPets);
+router.post('/', petsController.createPet);
+router.post('/withimage', uploader.single('image'), petsController.createPetWithImage);
+router.put('/:pid', petsController.updatePet);
+router.delete('/:pid', petsController.deletePet);
+```
+
+Note the **Multer middleware** (`uploader.single('image')`) on the withimage route.
+
+### Pet DTO
+
+The Pet DTO (`src/dto/Pet.dto.js`) transforms input data before saving to the database, ensuring consistent data structure and default values.
+
+---
+
+## Related Endpoints
+
+<CardGroup cols={2}>
+  <Card title="Adoptions API" icon="heart" href="/api/adoptions">
+    Create adoption records linking pets to users
+  </Card>
+  <Card title="Mocks API" icon="flask" href="/api/mocks">
+    Generate mock pet data for testing
+  </Card>
+</CardGroup>

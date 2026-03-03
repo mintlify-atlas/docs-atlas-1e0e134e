@@ -1,0 +1,293 @@
+---
+title: Installation
+description: Complete installation and configuration guide for the Adoptme API
+---
+
+# Installation guide
+
+This guide provides comprehensive instructions for installing and configuring the Adoptme API in various environments.
+
+## System requirements
+
+### Required software
+
+- **Node.js**: Version 22 or higher
+- **MongoDB**: Version 4.0 or higher
+- **npm**: Comes bundled with Node.js
+
+### Verify Node.js version
+
+Check your Node.js version:
+
+```bash
+node --version
+```
+
+You should see output like `v22.0.0` or higher.
+
+<Warning>
+  The Adoptme API requires Node.js version 22 or higher. It will not run correctly on earlier versions.
+</Warning>
+
+## Installation methods
+
+<Tabs>
+  <Tab title="Standard installation">
+    ### Clone the repository
+    
+    ```bash
+    git clone https://github.com/GitRepoFabi/coderhouse-backendIII.git
+    cd coderhouse-backendIII
+    ```
+    
+    ### Install dependencies
+    
+    ```bash
+    npm install
+    ```
+    
+    This installs all required packages including:
+    - express (4.18.2)
+    - mongoose (6.7.5)
+    - jsonwebtoken (8.5.1)
+    - bcrypt (5.1.0)
+    - swagger-jsdoc (6.2.8)
+    - @faker-js/faker (9.9.0)
+  </Tab>
+  
+  <Tab title="Development mode">
+    ### Install with dev dependencies
+    
+    ```bash
+    npm install
+    ```
+    
+    ### Run in development mode
+    
+    The project includes nodemon for automatic restarts:
+    
+    ```bash
+    npm run dev
+    ```
+    
+    This will watch for file changes and automatically restart the server.
+  </Tab>
+  
+  <Tab title="Docker installation">
+    ### Pull the Docker image
+    
+    ```bash
+    docker pull fabil2025/serverentregafinal:1.0.0
+    ```
+    
+    ### Run the container
+    
+    ```bash
+    docker run -p 3000:3000 \
+      -e PORT=3000 \
+      -e MONGO_URL=your_mongo_url \
+      -e DB_NAME=adoptme \
+      fabil2025/serverentregafinal:1.0.0
+    ```
+    
+    <Info>
+      See the development guide for detailed Docker instructions.
+    </Info>
+  </Tab>
+</Tabs>
+
+## Environment configuration
+
+### Required environment variables
+
+Create a `.env` file in the root directory of your project:
+
+```bash
+PORT=8080
+MONGO_URL=mongodb://127.0.0.1:27017
+DB_NAME=adoptme
+```
+
+### Environment variables reference
+
+<ParamField path="PORT" type="number" default="8080">
+  The port number where the Express server will listen for incoming requests
+</ParamField>
+
+<ParamField path="MONGO_URL" type="string" default="mongodb://127.0.0.1:27017" required>
+  MongoDB connection string. For local development, use `mongodb://127.0.0.1:27017`. For MongoDB Atlas or remote instances, use your full connection string
+</ParamField>
+
+<ParamField path="DB_NAME" type="string" default="adoptme" required>
+  The name of the MongoDB database to use for storing pets, users, and adoptions
+</ParamField>
+
+<Warning>
+  The `MONGO_URL` and `DB_NAME` variables are critical. The application will fail to start if it cannot connect to MongoDB on initialization.
+</Warning>
+
+### Configuration file
+
+The application uses the `src/config/config.js` file to load environment variables:
+
+```javascript
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+export default {
+    PORT: process.env.PORT || 8080,
+    MONGO_URL: process.env.MONGO_URL || 'mongodb://127.0.0.1:27017',
+    DB_NAME: process.env.DB_NAME || 'adoptme'
+}
+```
+
+All configuration values have sensible defaults for local development.
+
+## Start the server
+
+<CodeGroup>
+
+```bash Production
+npm start
+```
+
+```bash Development
+npm run dev
+```
+
+```bash Testing
+npm test
+```
+
+</CodeGroup>
+
+### Successful startup
+
+When the server starts successfully, you'll see:
+
+```
+Connection successful MongoDB
+Listening on 8080
+```
+
+## Verify installation
+
+After starting the server, verify everything is working:
+
+<Steps>
+  <Step title="Check server health">
+    Ensure the server is running by checking the console output for the "Listening on" message.
+  </Step>
+
+  <Step title="Access Swagger documentation">
+    Open your browser and navigate to:
+    
+    ```
+    http://localhost:8080/docs
+    ```
+    
+    You should see the interactive Swagger API documentation.
+  </Step>
+
+  <Step title="Test an API endpoint">
+    Make a simple API call:
+    
+    ```bash
+    curl http://localhost:8080/api/pets
+    ```
+    
+    Expected response:
+    
+    ```json
+    {
+      "status": "success",
+      "payload": []
+    }
+    ```
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+### Server won't start
+
+**Error: Cannot connect to MongoDB**
+
+```
+Error: connect ECONNREFUSED 127.0.0.1:27017
+```
+
+**Solution:** Ensure MongoDB is running on your system. Start MongoDB with:
+
+```bash
+# macOS (with Homebrew)
+brew services start mongodb-community
+
+# Linux (systemd)
+sudo systemctl start mongod
+
+# Windows
+net start MongoDB
+```
+
+### Port already in use
+
+**Error:**
+
+```
+Error: listen EADDRINUSE: address already in use :::8080
+```
+
+**Solution:** Change the PORT in your `.env` file to a different number (e.g., 3000, 5000) or stop the process using port 8080.
+
+### Node version incompatibility
+
+**Error:**
+
+```
+SyntaxError: Unexpected token 'export'
+```
+
+**Solution:** Update Node.js to version 22 or higher. The project uses ES modules which require a modern Node.js version.
+
+### Missing environment variables
+
+**Error:**
+
+```
+Error: MONGO_URL is not defined
+```
+
+**Solution:** Ensure your `.env` file exists in the root directory and contains all required variables. The application requires a valid MongoDB connection.
+
+## Running tests
+
+The project includes unit tests built with Mocha and Chai:
+
+```bash
+npm test
+```
+
+This will run all test suites in the `test/` directory.
+
+<Info>
+  Tests use Supertest for HTTP assertions and Chai for test assertions. Ensure your test database is separate from your development database.
+</Info>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Quickstart guide" icon="rocket" href="/quickstart">
+    Make your first API calls and generate mock data
+  </Card>
+  <Card title="API reference" icon="code" href="/api/overview">
+    Explore all available endpoints
+  </Card>
+  <Card title="Development guide" icon="docker" href="/deployment/docker">
+    Learn about Docker deployment and building images
+  </Card>
+  <Card title="Authentication" icon="lock" href="/api/sessions">
+    Set up JWT authentication for your application
+  </Card>
+</CardGroup>

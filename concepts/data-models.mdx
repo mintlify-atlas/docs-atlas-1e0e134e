@@ -1,0 +1,460 @@
+---
+title: 'Data Models'
+description: 'Complete reference for Mongoose schemas, models, and DTOs in the Adoptme API'
+---
+
+## Overview
+
+Adoptme uses **Mongoose** for MongoDB object modeling, defining three core collections: Users, Pets, and Adoptions. Each model includes schema validation, default values, and relationships between collections.
+
+All models are located in `src/dao/models/` and use Mongoose's schema-based approach for data structure and validation.
+
+## User Model
+
+The User model represents registered users who can adopt pets. Located in `src/dao/models/User.js`.
+
+### Schema Definition
+
+```javascript
+import mongoose from 'mongoose';
+
+const collection = 'Users';
+
+const schema = new mongoose.Schema({
+  first_name: {
+    type: String,
+    required: true
+  },
+  last_name: {
+    type: String,
+    required: true
+  },
+  email: {
+    type: String,
+    required: true,
+    unique: true
+  },
+  password: {
+    type: String,
+    required: true
+  },
+  role: {
+    type: String,
+    default: 'user'
+  },
+  pets: {
+    type: [
+      {
+        _id: {
+          type: mongoose.SchemaTypes.ObjectId,
+          ref: 'Pets'
+        }
+      }
+    ],
+    default: []
+  }
+})
+
+const userModel = mongoose.model(collection, schema);
+```
+
+### Fields
+
+<ParamField path="first_name" type="string" required>
+  User's first name
+</ParamField>
+
+<ParamField path="last_name" type="string" required>
+  User's last name
+</ParamField>
+
+<ParamField path="email" type="string" required>
+  User's email address. Must be unique across all users. Used for authentication.
+</ParamField>
+
+<ParamField path="password" type="string" required>
+  Hashed password using bcrypt with 10 salt rounds. Never stored in plain text.
+</ParamField>
+
+<ParamField path="role" type="string" default="user">
+  User role for authorization. Default is `'user'`. Can be used for admin/moderator roles.
+</ParamField>
+
+<ParamField path="pets" type="array" default="[]">
+  Array of ObjectId references to Pet documents. Represents pets adopted by this user.
+  
+  Each item contains:
+  - `_id` (ObjectId) - Reference to a Pet document
+</ParamField>
+
+### Relationships
+
+- **One-to-Many with Pets**: A user can have multiple pets (stored in `pets` array)
+- **One-to-Many with Adoptions**: A user can create multiple adoption records
+
+<Note>
+The `pets` field stores references (ObjectIds) to Pet documents, enabling Mongoose population for retrieving full pet details.
+</Note>
+
+### Password Security
+
+Passwords are hashed before storage using bcrypt from `src/utils/index.js`:
+
+```javascript
+import bcrypt from 'bcrypt';
+
+export const createHash = async(password) => {
+  const salts = await bcrypt.genSalt(10);
+  return bcrypt.hash(password, salts);
+}
+
+export const passwordValidation = async(user, password) => {
+  return bcrypt.compare(password, user.password);
+}
+```
+
+**Security features:**
+- 10 salt rounds for bcrypt hashing
+- Async hashing to avoid blocking
+- Comparison function for login validation
+
+---
+
+## Pet Model
+
+The Pet model represents animals available for adoption. Located in `src/dao/models/Pet.js`.
+
+### Schema Definition
+
+```javascript
+import mongoose from 'mongoose';
+
+const collection = 'Pets';
+
+const schema = new mongoose.Schema({
+  name: {
+    type: String,
+    required: true,
+  },
+  specie: {
+    type: String,
+    required: true
+  },
+  birthDate: Date,
+  adopted: {
+    type: Boolean,
+    default: false
+  },
+  owner: {
+    type: mongoose.SchemaTypes.ObjectId,
+    ref: 'Users'
+  },
+  image: String
+})
+
+const petModel = mongoose.model(collection, schema);
+```
+
+### Fields
+
+<ParamField path="name" type="string" required>
+  Pet's name
+</ParamField>
+
+<ParamField path="specie" type="string" required>
+  Species of the pet (e.g., "dog", "cat", "rabbit")
+</ParamField>
+
+<ParamField path="birthDate" type="Date">
+  Pet's date of birth. Used to calculate age.
+</ParamField>
+
+<ParamField path="adopted" type="boolean" default="false">
+  Adoption status. `false` means available for adoption, `true` means already adopted.
+</ParamField>
+
+<ParamField path="owner" type="ObjectId">
+  Reference to the User who adopted this pet. Null if not adopted.
+  
+  References the `Users` collection.
+</ParamField>
+
+<ParamField path="image" type="string">
+  File path to pet's image. Set when uploading via `/api/pets/withimage` endpoint.
+  
+  Example: `/src/public/img/pet-12345.jpg`
+</ParamField>
+
+### Relationships
+
+- **Many-to-One with Users**: A pet can have one owner (or none if not adopted)
+- **One-to-One with Adoptions**: Each pet can have one adoption record
+
+### Image Upload
+
+Pets can have images uploaded via the `POST /api/pets/withimage` endpoint using **Multer** middleware:
+
+```javascript
+import uploader from '../utils/uploader.js';
+
+router.post('/withimage', uploader.single('image'), petsController.createPetWithImage);
+```
+
+The image path is stored in the `image` field:
+
+```javascript
+const pet = PetDTO.getPetInputFrom({
+  name,
+  specie,
+  birthDate,
+  image: `${__dirname}/../public/img/${file.filename}`
+});
+```
+
+---
+
+## Adoption Model
+
+The Adoption model represents the relationship between users and adopted pets. Located in `src/dao/models/Adoption.js`.
+
+### Schema Definition
+
+```javascript
+import mongoose from "mongoose";
+
+const collection = "Adoptions";
+
+const schema = new mongoose.Schema({
+  owner: {
+    type: mongoose.SchemaTypes.ObjectId,
+    ref: 'Users'
+  },
+  pet: {
+    type: mongoose.SchemaTypes.ObjectId,
+    ref: 'Pets'
+  }
+})
+
+const adoptionModel = mongoose.model(collection, schema);
+```
+
+### Fields
+
+<ParamField path="owner" type="ObjectId">
+  Reference to the User who is adopting the pet.
+  
+  References the `Users` collection.
+</ParamField>
+
+<ParamField path="pet" type="ObjectId">
+  Reference to the Pet being adopted.
+  
+  References the `Pets` collection.
+</ParamField>
+
+### Relationships
+
+The Adoption model creates a **Many-to-Many** relationship between Users and Pets:
+
+- **Many-to-One with Users**: Multiple adoptions can belong to one user
+- **Many-to-One with Pets**: Multiple adoption records can reference pets (historical records)
+
+<Note>
+The Adoption model acts as a **junction table**, recording the relationship between users and pets when an adoption occurs.
+</Note>
+
+### Usage Example
+
+When a user adopts a pet:
+
+1. Create an Adoption record linking the user and pet
+2. Update the Pet's `adopted` field to `true`
+3. Update the Pet's `owner` field with the user's ID
+4. Add the pet's ID to the User's `pets` array
+
+---
+
+## Data Transfer Objects (DTOs)
+
+DTOs transform and validate data between layers, ensuring clean separation and security.
+
+### User DTO
+
+Located in `src/dto/User.dto.js`, the User DTO removes sensitive information when creating JWT tokens:
+
+```javascript
+export default class UserDTO {
+  static getUserTokenFrom = (user) => {
+    return {
+      name: `${user.first_name} ${user.last_name}`,
+      role: user.role,
+      email: user.email
+    }
+  }
+}
+```
+
+**Purpose:**
+- Combines `first_name` and `last_name` into a single `name` field
+- **Excludes password** from JWT payload for security
+- Includes only necessary fields: `name`, `role`, `email`
+
+**Usage in authentication:**
+
+```javascript
+import UserDTO from '../dto/User.dto.js';
+import jwt from 'jsonwebtoken';
+
+const login = async (req, res) => {
+  const user = await usersService.getUserByEmail(email);
+  const isValidPassword = await passwordValidation(user, password);
+  
+  if (isValidPassword) {
+    const userDto = UserDTO.getUserTokenFrom(user);
+    const token = jwt.sign(userDto, 'tokenSecretJWT', {expiresIn: "1h"});
+    res.cookie('coderCookie', token, {maxAge: 3600000}).send({status: "success"})
+  }
+}
+```
+
+<Warning>
+Never include sensitive fields like passwords in JWTs or API responses. Always use DTOs to filter data.
+</Warning>
+
+### Pet DTO
+
+Located in `src/dto/Pet.dto.js`, the Pet DTO validates and sets defaults for pet creation:
+
+```javascript
+export default class PetDTO {
+  static getPetInputFrom = (pet) => {
+    return {
+      name: pet.name || '',
+      specie: pet.specie || '',
+      image: pet.image || '',
+      birthDate: pet.birthDate || '12-30-2000',
+      adopted: false
+    }
+  }
+}
+```
+
+**Purpose:**
+- Sets default values for optional fields
+- Ensures `adopted` is always `false` for new pets
+- Provides fallback `birthDate` if not specified
+- Validates presence of required fields
+
+**Usage in pet creation:**
+
+```javascript
+import PetDTO from "../dto/Pet.dto.js";
+
+const createPet = async(req, res) => {
+  const {name, specie, birthDate} = req.body;
+  
+  if (!name || !specie || !birthDate) {
+    return res.status(400).send({status: "error", error: "Incomplete values"})
+  }
+  
+  const pet = PetDTO.getPetInputFrom({name, specie, birthDate});
+  const result = await petsService.create(pet);
+  res.send({status: "success", payload: result})
+}
+```
+
+---
+
+## Model Relationships Diagram
+
+```
+┌─────────────────┐
+│     Users       │
+├─────────────────┤
+│ _id             │
+│ first_name      │
+│ last_name       │
+│ email (unique)  │
+│ password (hash) │
+│ role            │
+│ pets: [Pet._id] │◄────┐
+└─────────────────┘     │
+         ▲              │
+         │              │
+         │              │
+         │              │
+┌─────────────────┐     │
+│   Adoptions     │     │
+├─────────────────┤     │
+│ _id             │     │
+│ owner (User._id)│─────┘
+│ pet (Pet._id)   │─────┐
+└─────────────────┘     │
+                        │
+                        ▼
+                ┌─────────────────┐
+                │      Pets       │
+                ├─────────────────┤
+                │ _id             │
+                │ name            │
+                │ specie          │
+                │ birthDate       │
+                │ adopted         │
+                │ owner (User._id)│
+                │ image           │
+                └─────────────────┘
+```
+
+## Collection Names
+
+| Model | Collection Name | Document Count |
+|-------|----------------|----------------|
+| User | `Users` | Variable |
+| Pet | `Pets` | Variable |
+| Adoption | `Adoptions` | Variable |
+
+## Validation Rules
+
+<Accordion title="Field Validation Summary">
+
+### User Validation
+- `first_name`: Required, string
+- `last_name`: Required, string
+- `email`: Required, string, **unique index**
+- `password`: Required, string (stored as bcrypt hash)
+- `role`: Optional, string, defaults to `'user'`
+- `pets`: Optional, array of ObjectIds, defaults to `[]`
+
+### Pet Validation
+- `name`: Required, string
+- `specie`: Required, string
+- `birthDate`: Optional, Date
+- `adopted`: Optional, boolean, defaults to `false`
+- `owner`: Optional, ObjectId reference
+- `image`: Optional, string (file path)
+
+### Adoption Validation
+- `owner`: Optional, ObjectId reference to Users
+- `pet`: Optional, ObjectId reference to Pets
+
+</Accordion>
+
+## Best Practices
+
+<Note>
+Follow these best practices when working with Adoptme data models:
+</Note>
+
+1. **Always use DTOs** - Transform data between layers using User.dto.js and Pet.dto.js
+2. **Hash passwords** - Use `createHash()` utility before storing passwords
+3. **Validate references** - Ensure referenced documents exist before creating relationships
+4. **Set adopted status** - Update `Pet.adopted` when creating an Adoption record
+5. **Use population** - Leverage Mongoose's `.populate()` to retrieve referenced documents
+6. **Handle unique constraints** - Catch duplicate email errors on user registration
+7. **Default values** - Let DTOs and schemas handle defaults consistently
+
+## Next Steps
+
+- Learn about [Authentication](/concepts/authentication) flows
+- Explore the [Architecture](/concepts/architecture) design patterns
+- See [API Reference](/api/overview) for endpoint usage
